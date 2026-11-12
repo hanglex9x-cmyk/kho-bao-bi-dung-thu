@@ -305,7 +305,7 @@ let DB=null, PRODUCTS=[];
 function blankDB(){return{warehouses:[],partners:[],txs:[],docs:[],payments:[],debtAdjustments:[],stockAdjustments:[],logs:[],templates:[],
  users:[{id:"u1",username:"admin",password:"1234",name:"Quản trị viên",role:"admin"}],
  settings:{company:"CÔNG TY TNHH BAO BÌ DÙNG THỬ",address:"",phone:"",tax:""},
- seq:{PN:0,PX:0,PC:0,BG:0,DH:0,HD:0,KH:0,NCC:0,HH:734,KHOK:0},productEdits:{},extraProducts:[],theme:"light"}}
+ seq:{PN:0,PX:0,PC:0,TD:0,BG:0,DH:0,HD:0,KH:0,NCC:0,HH:734,KHOK:0},productEdits:{},extraProducts:[],theme:"light"}}
 function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB))}catch(e){}}
 function loadDB(){try{const raw=localStorage.getItem(LS_KEY);if(raw){DB=JSON.parse(raw);if(!Array.isArray(DB.debtAdjustments))DB.debtAdjustments=[];if(!Array.isArray(DB.stockAdjustments))DB.stockAdjustments=[];mergeSeedPartners();return}}catch(e){}DB=blankDB();mergeSeedPartners();save()}
 /* Danh sách khách hàng nạp sẵn từ file Sapo (146 khách: mã Id Sapo + tên). BẢN DÙNG THỬ CÔNG KHAI: đã bỏ toàn bộ số điện thoại khỏi dữ liệu nạp sẵn để không lộ SĐT của khách hàng cho người có link — SĐT đầy đủ chỉ giữ ở bản riêng của khách. Nạp lại theo mã nên không trùng. */
@@ -328,7 +328,8 @@ function stockMap(){const m={};DB.txs.forEach(t=>{if(t.status!=="approved")retur
  t.lines.forEach(l=>{const q=Number(l.qty)||0;
   if(t.type==="import"){const k=t.warehouseId+"|"+l.productId;m[k]=(m[k]||0)+q}
   else if(t.type==="export"){const k=t.warehouseId+"|"+l.productId;m[k]=(m[k]||0)-q}
-  else if(t.type==="transfer"){const a=t.warehouseId+"|"+l.productId,b=t.toWarehouseId+"|"+l.productId;m[a]=(m[a]||0)-q;m[b]=(m[b]||0)+q}})});
+  else if(t.type==="transfer"){const a=t.warehouseId+"|"+l.productId,b=t.toWarehouseId+"|"+l.productId;m[a]=(m[a]||0)-q;m[b]=(m[b]||0)+q}
+  else if(t.type==="opening"){const k=t.warehouseId+"|"+l.productId;m[k]=(m[k]||0)+q}})});
  (DB.stockAdjustments||[]).forEach(a=>{const k=a.warehouseId+"|"+a.productId;m[k]=(m[k]||0)+(Number(a.delta)||0)});
  return m}
 function stockOf(whId,pid){return stockMap()[whId+"|"+pid]||0}
@@ -454,7 +455,7 @@ function recentHTML(){const rows=DB.txs.slice(0,8);
  if(!rows.length)return '<div class="card" style="margin-top:14px"><div class="chead">Phiếu gần đây</div><div class="empty">Chưa có phiếu nào. Vào mục Nhập kho / Xuất kho để lập phiếu đầu tiên.</div></div>';
  return '<div class="card" style="margin-top:14px"><div class="chead">Phiếu gần đây</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Số phiếu</th><th>Loại</th><th>Ngày</th><th>Kho</th><th>Khách hàng</th><th class="num">Tổng tiền</th><th>Trạng thái</th></tr></thead><tbody>'+
  rows.map(t=>"<tr><td><b>"+esc(t.code)+"</b></td><td>"+txTypeLabel(t.type)+"</td><td>"+fmtDate(t.date)+"</td><td>"+esc(whById(t.warehouseId)?.name||"")+"</td><td>"+esc(partnerById(t.partnerId)?.name||"—")+'</td><td class="num">'+fmtMoney(txTotal(t))+"</td><td>"+txStatusBadge(t.status)+"</td></tr>").join("")+"</tbody></table></div></div>"}
-function txTypeLabel(t){return t==="import"?"Nhập kho":t==="export"?"Xuất kho":"Chuyển kho"}
+function txTypeLabel(t){return t==="import"?"Nhập kho":t==="export"?"Xuất kho":t==="opening"?"Tồn đầu":"Chuyển kho"}
 function txStatusBadge(s){return s==="approved"?'<span class="badge b-green">Đã duyệt</span>':s==="cancelled"?'<span class="badge b-red">Đã hủy</span>':'<span class="badge b-gray">Chờ duyệt</span>'}
 /* ================= Products ================= */
 let prodQ="",prodBig="",prodSub="";
@@ -677,10 +678,10 @@ function txDetail(id){const t=DB.txs.find(x=>x.id===id);if(!t)return;const tot=t
  '<div class="tbl-wrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>Mã hàng</th><th>Tên hàng</th><th>ĐVT</th><th class="num">Số lượng</th><th class="num">Đơn giá</th><th class="num">Thành tiền</th></tr></thead><tbody>'+
  t.lines.map(l=>{const p=prodById(l.productId);return "<tr><td>"+esc(p?p.code:"")+"</td><td>"+esc(p?p.name:"")+"</td><td>"+esc(l.unit||(p?p.unit:""))+'</td><td class="num">'+fmtN(l.qty)+'</td><td class="num">'+fmtMoney(l.price)+'</td><td class="num">'+fmtMoney(l.qty*l.price)+"</td></tr>"}).join("")+
  '</tbody></table></div><div class="totals"><div class="trow"><span>Tổng tiền:</span><b>'+fmtMoney(tot)+"</b></div>"+
- (t.type!=="transfer"?'<div class="trow"><span>Đã thanh toán:</span><span>'+fmtMoney(paid)+'</span></div><div class="trow"><span>Còn nợ:</span><b>'+fmtMoney(Math.max(0,tot-paid))+"</b></div>":"")+"</div>"+
+ ((t.type==="import"||t.type==="export")?'<div class="trow"><span>Đã thanh toán:</span><span>'+fmtMoney(paid)+'</span></div><div class="trow"><span>Còn nợ:</span><b>'+fmtMoney(Math.max(0,tot-paid))+"</b></div>":"")+"</div>"+
  (t.type==="export"&&t.status==="approved"?deliveryFormHTML(t):"")+
  '</div><div class="mfoot">'+
- (t.status==="draft"?'<button class="btn primary" onclick="closeModal();approveTx(\''+t.id+'\')">Duyệt phiếu</button><button class="btn" onclick="closeModal();txForm(\''+t.type+"','"+t.id+'\')">Sửa</button>':"")+
+ (t.status==="draft"?'<button class="btn primary" onclick="closeModal();approveTx(\''+t.id+'\')">Duyệt phiếu</button>'+(t.type!=="opening"?'<button class="btn" onclick="closeModal();txForm(\''+t.type+"','"+t.id+'\')">Sửa</button>':""):"")+
  (t.status==="approved"?'<button class="btn" onclick="askCancelFromDetail(\''+t.id+'\')">Hủy phiếu</button>':"")+
  '<button class="btn" onclick="printTx(\''+t.id+'\')">In phiếu</button>'+
  '<button class="btn" onclick="closeModal()">Đóng</button></div>',true)}
@@ -724,8 +725,9 @@ function txAllPage(p){setPage("txall",p);render()}
 /* ---- Stock ---- */
 let stockWh="",stockQ="",stockFrom="",stockTo="",stockMode="all",stockBig="",stockSub="";
 /* Báo cáo Xuất – Nhập – Tồn: tính từ phiếu ĐÃ DUYỆT.
-   Tồn đầu = phát sinh trước "Từ ngày"; Nhập/Xuất = phát sinh trong kỳ; Tồn cuối = Tồn đầu + Nhập − Xuất.
-   Không chọn ngày = toàn bộ thời gian (Tồn đầu = 0). Danh sách luôn hiện TOÀN BỘ sản phẩm, kể cả tồn = 0. */
+   Tồn đầu = phát sinh trước "Từ ngày" CỘNG phiếu tồn đầu TD (phiếu TD không tính vào cột Nhập);
+   Nhập/Xuất = phát sinh trong kỳ; Tồn cuối = Tồn đầu + Nhập − Xuất.
+   Danh sách luôn hiện TOÀN BỘ sản phẩm, kể cả tồn = 0. */
 function nxtCalc(){const whSet=stockWh?{[stockWh]:1}:null;const inWh=id=>!whSet||whSet[id];
  const byProd={},byWh={};
  function acc(pid,whId,when,delta,nhap,xuat){const k=String(pid);
@@ -739,7 +741,8 @@ function nxtCalc(){const whSet=stockWh?{[stockWh]:1}:null;const inWh=id=>!whSet|
   t.lines.forEach(l=>{const q=Number(l.qty)||0;if(!q)return;
    if(t.type==="import"){if(inWh(t.warehouseId))acc(l.productId,t.warehouseId,period,q,q,0)}
    else if(t.type==="export"){if(inWh(t.warehouseId))acc(l.productId,t.warehouseId,period,-q,0,q)}
-   else if(t.type==="transfer"){if(inWh(t.warehouseId))acc(l.productId,t.warehouseId,period,-q,0,q);if(inWh(t.toWarehouseId))acc(l.productId,t.toWarehouseId,period,q,q,0)}})});
+   else if(t.type==="transfer"){if(inWh(t.warehouseId))acc(l.productId,t.warehouseId,period,-q,0,q);if(inWh(t.toWarehouseId))acc(l.productId,t.toWarehouseId,period,q,q,0)}
+   else if(t.type==="opening"){if(inWh(t.warehouseId))acc(l.productId,t.warehouseId,"before",q,0,0)}})});
  (DB.stockAdjustments||[]).forEach(a=>{if(!inWh(a.warehouseId))return;const d=String(a.date||"").slice(0,10);
   const period=(stockFrom&&d&&d<stockFrom)?"before":(stockTo&&d&&d>stockTo)?"skip":"in";
   if(period==="skip")return;const delta=Number(a.delta)||0;if(!delta)return;
@@ -760,7 +763,7 @@ function vStock(r){const rows=stockRows();
  let sumNhap=0,sumXuat=0,sumTon=0,sumVal=0,sumDau=0;
  rows.forEach(x=>{sumDau+=x.dau;sumNhap+=x.nhap;sumXuat+=x.xuat;sumTon+=x.tot;sumVal+=x.tot*(Number(x.p.cost)||0)});
  const stat=(l,v)=>'<div class="card stat"><div class="sl">'+l+'</div><div class="sv" style="font-size:19px">'+v+"</div></div>";
- const noWhNote=DB.warehouses.length===0?'<div class="trial-banner" style="margin-bottom:12px">Chưa tạo kho nào nên số Nhập / Xuất / Tồn đang bằng 0. Danh sách dưới đây vẫn hiện đủ toàn bộ sản phẩm — tạo kho ở mục <b>Kho hàng</b>, lập phiếu ở <b>Nhập kho</b> rồi <b>Duyệt phiếu</b> là số liệu sẽ lên ngay tại đây.</div>':"";
+ const noWhNote=DB.warehouses.length===0?'<div class="trial-banner" style="margin-bottom:12px">Chưa có số liệu tồn kho. Danh sách dưới đây vẫn hiện đủ toàn bộ sản phẩm — bấm nút bút chì ở cột <b>Tồn đầu</b> để nhập tồn đầu kỳ, hoặc nút chỉnh ở cuối dòng để nhập số tồn thực tế: hệ thống tự dùng kho mặc định, <b>không cần tạo kho trước</b>.</div>':"";
  r.innerHTML='<div class="grid stat-grid" style="margin-bottom:14px">'+
  stat("Tổng số sản phẩm",fmtN(rows.length))+
  stat("Tồn đầu kỳ",fmtN(sumDau))+
@@ -769,17 +772,17 @@ function vStock(r){const rows=stockRows();
  stat("Tồn cuối kỳ",fmtN(sumTon))+
  stat("Giá trị tồn cuối",fmtMoney(sumVal))+
  "</div>"+
- '<div class="card"><div class="chead">Tồn kho — Báo cáo Xuất Nhập Tồn <span class="badge b-gray">'+rows.length+' sản phẩm</span><span style="flex:1"></span><button class="btn sm" onclick="stockAdjustHistory()">Lịch sử điều chỉnh</button> <button class="btn primary sm" onclick="stockAdjustForm()">Chỉnh sửa tồn kho</button></div><div class="cbody">'+noWhNote+
- '<div style="background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.35);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px"><b>Cách sửa tồn kho:</b> bấm nút chỉnh ở cuối dòng sản phẩm cần sửa (hoặc nút <b>“Chỉnh sửa tồn kho”</b> ở trên), chọn đúng kho, nhập <b>số tồn thực tế</b> đếm được ngoài kho rồi ghi lý do — hệ thống tự tạo phiếu điều chỉnh và cập nhật số tồn ngay, không cần lập phiếu nhập / xuất. Mọi lần sửa đều lưu trong <b>Lịch sử điều chỉnh</b> để đối chiếu.</div>'+
+ '<div class="card"><div class="chead">Tồn kho — Báo cáo Xuất Nhập Tồn <span class="badge b-gray">'+rows.length+' sản phẩm</span><span style="flex:1"></span><button class="btn sm" onclick="stockAdjustHistory()">Lịch sử điều chỉnh</button> <button class="btn sm" onclick="openingStockForm()">Nhập tồn đầu</button> <button class="btn primary sm" onclick="stockAdjustForm()">Chỉnh sửa tồn kho</button></div><div class="cbody">'+noWhNote+
+ '<div style="background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.35);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px"><b>Cách nhập / sửa tồn:</b> cột <b>Tồn đầu</b> có nút bút chì ở từng dòng — bấm vào là nhập hoặc sửa tự do số tồn đầu kỳ theo từng kho (nhập 0 là xóa tồn đầu, tồn đầu không tính vào cột Nhập). Sửa <b>tồn cuối</b> theo kiểm kê thì bấm nút chỉnh ở cuối dòng (hoặc nút <b>“Chỉnh sửa tồn kho”</b> ở trên), nhập <b>số tồn thực tế</b> đếm được rồi ghi lý do — hệ thống tự tạo phiếu điều chỉnh và cập nhật ngay, không cần lập phiếu nhập / xuất. Cả hai cách đều <b>không cần tạo kho trước</b>: chưa có kho thì hệ thống tự dùng kho mặc định. Mọi lần sửa đều lưu trong <b>Lịch sử</b> để đối chiếu.</div>'+
  '<div class="toolbar"><select id="stkWh" style="width:auto;min-width:170px"><option value="">Tất cả kho</option>'+DB.warehouses.map(w=>'<option value="'+w.id+'" '+(stockWh===w.id?"selected":"")+">"+esc(w.code+" — "+w.name)+"</option>").join("")+"</select>"+
  '<select id="stkBig" style="width:auto;min-width:150px"><option value="">Tất cả nhóm lớn</option>'+BIG_GROUPS.map(c=>'<option '+(stockBig===c?"selected":"")+' value="'+esc(c)+'">'+esc(c)+"</option>").join("")+"</select>"+
  '<select id="stkSub" style="width:auto;min-width:170px"><option value="">Tất cả nhóm nhỏ (NCC)</option>'+subGroupsOf(stockBig).map(c=>'<option '+(stockSub===c?"selected":"")+' value="'+esc(c)+'">'+esc(c)+"</option>").join("")+"</select>"+
  '<div class="grow"><input id="stkQ" placeholder="Tìm theo tên hoặc mã sản phẩm…" value="'+esc(stockQ)+'"></div>'+
  '<select id="stkMode" style="width:auto;min-width:160px"><option value="all" '+(stockMode==="all"?"selected":"")+'>Tất cả sản phẩm</option><option value="stock" '+(stockMode==="stock"?"selected":"")+'>Chỉ SP còn tồn</option><option value="move" '+(stockMode==="move"?"selected":"")+'>Chỉ SP có nhập / xuất</option></select>'+
  '<button class="btn sm" onclick="exportStockCSV()">Xuất Excel (CSV)</button></div>'+
- '<div class="toolbar"><span style="font-size:12.5px;color:var(--muted);font-weight:600">Kỳ báo cáo:</span><label style="font-size:12.5px;color:var(--muted)">Từ ngày <input type="date" id="stkFrom" value="'+esc(stockFrom)+'" style="width:auto"></label><label style="font-size:12.5px;color:var(--muted)">Đến ngày <input type="date" id="stkTo" value="'+esc(stockTo)+'" style="width:auto"></label>'+(stockFrom||stockTo?'<button class="btn sm" onclick="stockClearDates()">Xóa lọc ngày</button>':"")+'<span style="font-size:12px;color:var(--muted)">Số liệu tính từ phiếu đã duyệt và các phiếu điều chỉnh tồn kho. Cuối mỗi dòng: nút chỉnh để sửa tồn, nút mắt để xem từng phiếu nhập / xuất của sản phẩm.</span></div>'+
+ '<div class="toolbar"><span style="font-size:12.5px;color:var(--muted);font-weight:600">Kỳ báo cáo:</span><label style="font-size:12.5px;color:var(--muted)">Từ ngày <input type="date" id="stkFrom" value="'+esc(stockFrom)+'" style="width:auto"></label><label style="font-size:12.5px;color:var(--muted)">Đến ngày <input type="date" id="stkTo" value="'+esc(stockTo)+'" style="width:auto"></label>'+(stockFrom||stockTo?'<button class="btn sm" onclick="stockClearDates()">Xóa lọc ngày</button>':"")+'<span style="font-size:12px;color:var(--muted)">Số liệu tính từ phiếu đã duyệt, phiếu tồn đầu và các phiếu điều chỉnh tồn kho. Nút bút chì ở cột Tồn đầu để nhập / sửa tồn đầu; cuối mỗi dòng: nút chỉnh để sửa tồn cuối, nút mắt để xem từng phiếu nhập / xuất của sản phẩm.</span></div>'+
  '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mã hàng</th><th>Tên sản phẩm</th><th>Nhóm lớn</th><th>Nhóm nhỏ (NCC)</th><th>ĐVT</th><th class="num">Tồn đầu</th><th class="num">Nhập</th><th class="num">Xuất</th><th class="num">Tồn cuối</th>'+whCols.map(w=>'<th class="num">Tồn tại '+esc(w.code)+"</th>").join("")+'<th class="num">Giá trị tồn (giá vốn)</th><th></th></tr></thead><tbody>'+
- (pg.pageRows.map(x=>"<tr><td><b>"+esc(x.p.code)+"</b></td><td>"+esc(x.p.name)+"</td><td>"+esc(pBig(x.p))+"</td><td>"+esc(pSub(x.p))+"</td><td>"+esc(x.p.unit)+'</td><td class="num">'+fmtN(x.dau)+'</td><td class="num" style="color:#059669;font-weight:600">'+fmtN(x.nhap)+'</td><td class="num" style="color:#dc2626;font-weight:600">'+fmtN(x.xuat)+'</td><td class="num"><b>'+fmtN(x.tot)+"</b></td>"+whCols.map(w=>'<td class="num">'+fmtN(x.byWh[w.id]||0)+"</td>").join("")+'<td class="num">'+fmtMoney(x.tot*(Number(x.p.cost)||0))+'</td><td><div class="row-actions"><button class="abtn" title="Chỉnh sửa tồn kho" onclick="stockAdjustForm(\''+x.p.id+'\')">'+ADJUST+'</button><button class="abtn" title="Xem chi tiết nhập / xuất" onclick="stockDetail(\''+x.p.id+"')\">"+EYE+"</button></div></td></tr>").join("")||'<tr><td colspan="13"><div class="empty">Không tìm thấy sản phẩm nào khớp bộ lọc. Thử xóa từ khóa tìm kiếm hoặc chọn “Tất cả sản phẩm”.</div></td></tr>')+
+ (pg.pageRows.map(x=>"<tr><td><b>"+esc(x.p.code)+"</b></td><td>"+esc(x.p.name)+"</td><td>"+esc(pBig(x.p))+"</td><td>"+esc(pSub(x.p))+"</td><td>"+esc(x.p.unit)+'</td><td class="num"><span style="display:inline-flex;align-items:center;gap:6px;justify-content:flex-end">'+fmtN(x.dau)+'<button class="abtn" title="Nhập / sửa tồn đầu" onclick="openingStockForm(\''+x.p.id+'\')">'+PEN+'</button></span></td><td class="num" style="color:#059669;font-weight:600">'+fmtN(x.nhap)+'</td><td class="num" style="color:#dc2626;font-weight:600">'+fmtN(x.xuat)+'</td><td class="num"><b>'+fmtN(x.tot)+"</b></td>"+whCols.map(w=>'<td class="num">'+fmtN(x.byWh[w.id]||0)+"</td>").join("")+'<td class="num">'+fmtMoney(x.tot*(Number(x.p.cost)||0))+'</td><td><div class="row-actions"><button class="abtn" title="Chỉnh sửa tồn kho" onclick="stockAdjustForm(\''+x.p.id+'\')">'+ADJUST+'</button><button class="abtn" title="Xem chi tiết nhập / xuất" onclick="stockDetail(\''+x.p.id+"')\">"+EYE+"</button></div></td></tr>").join("")||'<tr><td colspan="13"><div class="empty">Không tìm thấy sản phẩm nào khớp bộ lọc. Thử xóa từ khóa tìm kiếm hoặc chọn “Tất cả sản phẩm”.</div></td></tr>')+
  "</tbody></table></div>"+pagerHTML("stock",pg,"stockPage")+"</div></div>";
  $("#stkWh").addEventListener("change",e=>{stockWh=e.target.value;setPage("stock",1);render()});
  $("#stkBig").addEventListener("change",e=>{stockBig=e.target.value;stockSub="";setPage("stock",1);render()});
@@ -797,7 +800,8 @@ function stockDetail(pid){const p=prodById(pid);if(!p)return;
   t.lines.forEach(l=>{if(String(l.productId)!==String(pid))return;const q=Number(l.qty)||0;
    if(t.type==="import"){tin+=q;lines.push({t,wh:t.warehouseId,nhap:q,xuat:0,label:"Nhập kho"})}
    else if(t.type==="export"){tout+=q;lines.push({t,wh:t.warehouseId,nhap:0,xuat:q,label:"Xuất kho"})}
-   else if(t.type==="transfer"){tout+=q;tin+=q;lines.push({t,wh:t.warehouseId,nhap:0,xuat:q,label:"Chuyển ra"});lines.push({t,wh:t.toWarehouseId,nhap:q,xuat:0,label:"Chuyển vào"})}})});
+   else if(t.type==="transfer"){tout+=q;tin+=q;lines.push({t,wh:t.warehouseId,nhap:0,xuat:q,label:"Chuyển ra"});lines.push({t,wh:t.toWarehouseId,nhap:q,xuat:0,label:"Chuyển vào"})}
+   else if(t.type==="opening"){tin+=q;lines.push({t,wh:t.warehouseId,nhap:q,xuat:0,label:"Tồn đầu kỳ"})}})});
  (DB.stockAdjustments||[]).filter(a=>String(a.productId)===String(pid)).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(a=>{const delta=Number(a.delta)||0;if(!delta)return;
   if(delta>0)tin+=delta;else tout+=-delta;
   lines.push({t:{date:a.date,code:a.code,lines:[{productId:pid,price:0}]},wh:a.warehouseId,nhap:delta>0?delta:0,xuat:delta<0?-delta:0,label:"Điều chỉnh tồn"})});
@@ -808,7 +812,7 @@ function stockDetail(pid){const p=prodById(pid);if(!p)return;
  (lines.length?'<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Ngày</th><th>Số phiếu</th><th>Loại</th><th>Kho</th><th class="num">Nhập</th><th class="num">Xuất</th><th class="num">Đơn giá</th></tr></thead><tbody>'+
   lines.map(x=>"<tr><td>"+fmtDate(x.t.date)+"</td><td><b>"+esc(x.t.code)+"</b></td><td>"+x.label+"</td><td>"+whName(x.wh)+'</td><td class="num">'+(x.nhap?fmtN(x.nhap):"—")+'</td><td class="num">'+(x.xuat?fmtN(x.xuat):"—")+'</td><td class="num">'+fmtMoney(x.t.lines.find(l=>String(l.productId)===String(pid))?.price||0)+"</td></tr>").join("")+"</tbody></table></div>"
  :'<div class="empty">Sản phẩm này chưa có phiếu nhập / xuất nào được duyệt và chưa có điều chỉnh tồn nào. Lập phiếu ở mục Nhập kho / Xuất kho và duyệt phiếu, hoặc bấm “Chỉnh sửa tồn kho” bên dưới để nhập số tồn thực tế.</div>')+
- '</div><div class="mfoot"><button class="btn" onclick="stockAdjustHistory(\''+pid+'\')">Lịch sử điều chỉnh</button><button class="btn primary" onclick="stockAdjustForm(\''+pid+'\')">Chỉnh sửa tồn kho</button><button class="btn" onclick="closeModal()">Đóng</button></div>',true)}
+ '</div><div class="mfoot"><button class="btn" onclick="stockAdjustHistory(\''+pid+'\')">Lịch sử điều chỉnh</button><button class="btn" onclick="openingStockForm(\''+pid+'\')">Nhập / sửa tồn đầu</button><button class="btn primary" onclick="stockAdjustForm(\''+pid+'\')">Chỉnh sửa tồn kho</button><button class="btn" onclick="closeModal()">Đóng</button></div>',true)}
 function exportStockCSV(){const rows=stockRows();const whCols=DB.warehouses.filter(w=>!stockWh||w.id===stockWh);
  const out=[["Mã hàng","Tên sản phẩm","Nhóm lớn","Nhóm nhỏ (NCC)","ĐVT","Tồn đầu","Nhập trong kỳ","Xuất trong kỳ","Tồn cuối",...whCols.map(w=>"Tồn tại "+w.code),"Giá trị tồn (giá vốn)"]];
  rows.forEach(x=>out.push([x.p.code,x.p.name,pBig(x.p),pSub(x.p),x.p.unit,x.dau,x.nhap,x.xuat,x.tot,...whCols.map(w=>x.byWh[w.id]||0),Math.round(x.tot*(Number(x.p.cost)||0))]));
@@ -816,6 +820,10 @@ function exportStockCSV(){const rows=stockRows();const whCols=DB.warehouses.filt
 /* ---- Chỉnh sửa tồn kho trực tiếp (phiếu điều chỉnh tồn) ----
    Tồn kho vẫn tính từ phiếu đã duyệt CỘNG các phiếu điều chỉnh dưới đây, nên sửa xong là
    mọi nơi (Tồn kho, Hàng hóa, Tổng quan, duyệt phiếu xuất) đều thấy số mới ngay. */
+/* Chưa có kho nào thì tự dùng 1 kho mặc định — chỉnh tồn và nhập tồn đầu bấm nút là nhập ngay,
+   không bắt người dùng phải vào mục Kho hàng tạo kho trước. */
+function ensureDefaultWarehouse(){if(DB.warehouses.length)return DB.warehouses[0];
+ const w={id:uid(),code:"KHO1",name:"Kho mặc định",address:"",manager:"",phone:""};DB.warehouses.push(w);logAct("Tạo kho mặc định","KHO1 — Kho mặc định (hệ thống tự tạo khi chỉnh tồn / nhập tồn đầu)");save();return w}
 function stockAdjPid(){const hid=$("#saf-pid");if(hid&&hid.value)return hid.value;
  const inp=$("#saf-product");if(!inp)return "";
  if(inp.dataset.pick)return inp.dataset.pick;
@@ -834,7 +842,7 @@ function stockAdjRefresh(){const pid=stockAdjPid();const whEl=$("#saf-wh");const
  const d=nv-cur;
  dEl.innerHTML=d===0?"Số mới bằng số hiện tại — lưu sẽ không thay đổi gì.":(d>0?"Hệ thống sẽ <b>tăng tồn thêm "+fmtN(d)+" "+esc(p.unit)+"</b> tại kho đã chọn.":"Hệ thống sẽ <b>giảm tồn "+fmtN(-d)+" "+esc(p.unit)+"</b> tại kho đã chọn.")}
 function stockAdjustForm(pid,whPref){
- if(!DB.warehouses.length){toast("Cần tạo ít nhất 1 kho hàng trước (mục Kho hàng) rồi mới chỉnh được tồn kho.",true);return}
+ ensureDefaultWarehouse();
  if(!Array.isArray(DB.stockAdjustments))DB.stockAdjustments=[];
  const p0=pid?prodById(pid):null;if(pid&&!p0){toast("Không tìm thấy sản phẩm.",true);return}
  const defWh=whPref||stockWh||DB.warehouses[0].id;
@@ -878,6 +886,68 @@ function stockAdjustHistory(pid){const p=pid?prodById(pid):null;
  '</div><div class="mfoot"><button class="btn" onclick="closeModal()">Đóng</button></div>',true)}
 function deleteStockAdjustment(id,backPid){const a=(DB.stockAdjustments||[]).find(x=>x.id===id);if(!a)return;const ap=prodById(a.productId);
  askConfirm("Xóa phiếu điều chỉnh tồn","Xóa phiếu "+(a.code||"")+" ("+(ap?ap.code:"")+", thay đổi "+(Number(a.delta)>0?"+":"")+fmtN(a.delta)+")? Số tồn sẽ tính lại như chưa từng điều chỉnh.",()=>{DB.stockAdjustments=DB.stockAdjustments.filter(x=>x.id!==id);logAct("Xóa điều chỉnh tồn kho",(a.code||"")+" · "+(ap?ap.code:""));save();render();stockAdjustHistory(backPid||undefined);toast("Đã xóa phiếu điều chỉnh, tồn kho đã tính lại.")})}
+/* ---- Nhập / sửa tồn đầu kỳ (phiếu tồn đầu mã TD) ----
+   Tồn đầu lưu trong 1 phiếu tồn đầu mã TD ĐÃ DUYỆT cho mỗi kho, mỗi mặt hàng 1 dòng.
+   Sửa lại lúc nào cũng được: nhập số mới là ghi đè, nhập 0 là xóa số dư đầu của mặt hàng đó.
+   Phiếu TD chỉ vào cột Tồn đầu và Tồn cuối — cột Nhập trong báo cáo XNT không tính phiếu TD.
+   Chưa có kho nào thì tự dùng kho mặc định, bấm nút là mở form nhập ngay. */
+function prevMonthEndStr(){const d=new Date();d.setDate(0);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function openingTxOf(whId){return DB.txs.find(t=>t.type==="opening"&&t.status==="approved"&&t.warehouseId===whId)}
+function openingQty(whId,pid){const t=openingTxOf(whId);if(!t)return 0;const l=t.lines.find(x=>String(x.productId)===String(pid));return l?Number(l.qty)||0:0}
+function openingPid(){const hid=$("#sof-pid");if(hid&&hid.value)return hid.value;
+ const inp=$("#sof-product");if(!inp)return "";
+ if(inp.dataset.pick)return inp.dataset.pick;
+ const v=inp.value.trim();if(!v)return "";
+ const f=allProducts().find(p=>fold(p.name)===fold(v)||fold(p.code)===fold(v));return f?String(f.id):""}
+function openingRefresh(){const pid=openingPid();const whEl=$("#sof-wh");const wh=whEl?whEl.value:"";
+ const curEl=$("#sof-cur"),dateEl=$("#sof-date"),qEl=$("#sof-qty");
+ const p=pid?prodById(pid):null;
+ if(!p){if(curEl)curEl.textContent="—";return}
+ const oq=openingQty(wh,p.id);
+ if(curEl)curEl.textContent=fmtN(oq)+" "+p.unit;
+ if(qEl&&!qEl.dataset.touched)qEl.value=oq?String(oq):"";
+ const t=wh?openingTxOf(wh):null;
+ if(dateEl&&t&&!dateEl.dataset.touched)dateEl.value=t.date||dateEl.value}
+function openingStockForm(pid,whPref){
+ ensureDefaultWarehouse();
+ const p0=pid?prodById(pid):null;if(pid&&!p0){toast("Không tìm thấy sản phẩm.",true);return}
+ const defWh=(whPref&&whById(whPref))?whPref:(stockWh&&whById(stockWh)?stockWh:DB.warehouses[0].id);
+ const td0=openingTxOf(defWh);
+ openModal(mHead("Nhập / sửa tồn đầu kỳ")+'<form id="openingForm"><div class="mbody">'+
+ '<p style="margin:0 0 12px;font-size:13px;color:var(--muted)">Nhập số tồn đầu kỳ của mặt hàng theo từng kho — sửa lại lúc nào cũng được, nhập <b>0</b> là xóa số tồn đầu đó. Tồn đầu lưu ở phiếu tồn đầu (mã TD) đã duyệt của kho và <b>không tính vào cột Nhập</b>; tồn cuối tự cập nhật theo. Chưa có kho thì hệ thống tự dùng kho mặc định, không cần tạo kho trước.</p>'+
+ (p0?'<div class="field" style="margin-bottom:12px"><label>Sản phẩm</label><div style="font-weight:700;font-size:14.5px">'+esc(p0.code)+" — "+esc(p0.name)+'</div><input type="hidden" id="sof-pid" value="'+esc(p0.id)+'"></div>'
+     :'<div class="field" style="margin-bottom:12px"><label>Sản phẩm *</label>'+comboHTML("sof-product","","Gõ mã hoặc tên sản phẩm…","product")+"</div>")+
+ '<div class="fgrid">'+
+ '<div class="field"><label>Kho *</label><select id="sof-wh">'+DB.warehouses.map(w=>'<option value="'+w.id+'" '+(defWh===w.id?"selected":"")+">"+esc(w.code+" — "+w.name)+"</option>").join("")+'</select></div>'+
+ '<div class="field"><label>Ngày tồn đầu</label><input id="sof-date" type="date" value="'+esc(td0?td0.date:prevMonthEndStr())+'"></div>'+
+ '<div class="field"><label>Tồn đầu hiện tại tại kho đã chọn</label><div style="font-size:16px;font-weight:800;padding:6px 0" id="sof-cur">—</div></div>'+
+ '<div class="field"><label>Số tồn đầu mới *</label><input id="sof-qty" type="number" min="0" step="any" required placeholder="Ví dụ: 100"></div>'+
+ '<div class="field full"><label>Ghi chú</label><input id="sof-note" placeholder="Ví dụ: tồn đầu khi bắt đầu dùng phần mềm, chốt số cuối tháng trước…"></div>'+
+ '</div></div><div class="mfoot"><button type="button" class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" type="submit">Lưu tồn đầu</button></div></form>');
+ $("#sof-wh").addEventListener("change",openingRefresh);
+ $("#sof-date").addEventListener("change",e=>{e.target.dataset.touched="1"});
+ $("#sof-qty").addEventListener("input",e=>{e.target.dataset.touched="1"});
+ const pin=$("#sof-product");if(pin){pin.addEventListener("combo-picked",openingRefresh);pin.addEventListener("input",()=>setTimeout(openingRefresh,60))}
+ openingRefresh();
+ $("#openingForm").addEventListener("submit",e=>{e.preventDefault();
+  const pid2=openingPid();const p=pid2?prodById(pid2):null;
+  if(!p){toast("Hãy chọn sản phẩm trong danh sách gợi ý.",true);return}
+  const wh=$("#sof-wh").value;const w=whById(wh);if(!w){toast("Hãy chọn kho.",true);return}
+  const raw=$("#sof-qty").value;const nv=Number(raw);
+  if(raw===""||isNaN(nv)||nv<0){toast("Nhập số tồn đầu hợp lệ (từ 0 trở lên).",true);return}
+  const date=$("#sof-date").value||prevMonthEndStr();const note=$("#sof-note").value.trim();
+  const old=openingQty(wh,p.id);
+  if(nv===old){toast("Số tồn đầu mới bằng số hiện tại nên không có gì thay đổi.",true);return}
+  let t=openingTxOf(wh);
+  if(!t){t={id:uid(),code:nextCode("TD"),type:"opening",status:"approved",date:date,warehouseId:wh,toWarehouseId:"",partnerId:"",note:"",paidAmount:0,deliveryStatus:"pending",deliveredAt:"",vehicle:"",driver:"",deliveryNote:"",lines:[]};DB.txs.unshift(t)}
+  t.date=date;if(note)t.note=note;
+  const li=t.lines.findIndex(x=>String(x.productId)===String(p.id));
+  if(nv===0){if(li>=0)t.lines.splice(li,1)}
+  else if(li>=0){t.lines[li].qty=nv;t.lines[li].price=Number(p.cost)||0;t.lines[li].unit=p.unit}
+  else t.lines.push({productId:p.id,qty:nv,unit:p.unit,price:Number(p.cost)||0});
+  if(!t.lines.length)DB.txs=DB.txs.filter(x=>x.id!==t.id);
+  logAct("Nhập tồn đầu",t.code+" · "+p.code+" · "+w.code+" · "+fmtN(old)+" → "+fmtN(nv)+(nv===0?" (xóa tồn đầu)":""));
+  save();closeModal();render();toast("Đã lưu tồn đầu "+p.code+" tại "+w.code+": "+fmtN(old)+" → "+fmtN(nv)+".")})}
 </script>
 <script>
 "use strict";
@@ -1284,7 +1354,7 @@ function signsHTML(a,b,c){return '<div class="signs"><div><b>'+a+'</b><div class
 function signs2HTML(a,b){return '<div class="signs"><div><b>'+a+'</b><div class="sp"></div>(Ký, họ tên)</div><div><b>'+b+'</b><div class="sp"></div>(Ký, họ tên)</div></div>'}
 function doPrint(){try{window.print()}catch(e){toast("Hãy dùng chức năng In của trình duyệt (Ctrl+P) để in chứng từ này.")}}
 function printTx(id){const t=DB.txs.find(x=>x.id===id);if(!t)return;const tot=txTotal(t);
- const title=t.type==="import"?"Phiếu nhập kho":t.type==="export"?"Phiếu xuất kho":"Phiếu chuyển kho";
+ const title=t.type==="import"?"Phiếu nhập kho":t.type==="export"?"Phiếu xuất kho":t.type==="opening"?"Phiếu tồn đầu kỳ":"Phiếu chuyển kho";
  $("#printArea").innerHTML='<style>@page{size:A4 portrait;margin:1.2cm}</style><div class="sheet">'+sheetHead(title,t.code,t.date)+
  '<div style="margin-bottom:8px">'+(t.type==="transfer"?"Kho đi: <b>"+esc(whById(t.warehouseId)?.name||"")+"</b> → Kho đến: <b>"+esc(whById(t.toWarehouseId)?.name||"")+"</b>":"Kho: <b>"+esc(whById(t.warehouseId)?.name||"")+"</b>")+
  (t.partnerId?" · Khách hàng: <b>"+esc(partnerById(t.partnerId)?.name||"")+"</b>":"")+(t.note?"<br>Ghi chú: "+esc(t.note):"")+"</div>"+
