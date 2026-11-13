@@ -303,7 +303,7 @@ const ADJUST='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const NAV=[
  {label:"I. Tổng quan",items:[["dashboard","Tổng quan","chart","#10b981"]]},
  {label:"II. Khai báo",items:[["products","Hàng hóa","box","#0ea5e9"],["warehouses","Kho hàng","wh","#6366f1"],["partners","Khách hàng","users","#eab308"]]},
- {label:"III. Bán hàng",items:[["orders","Đơn hàng & Giao hàng","clip","#10b981"]]},
+ {label:"III. Bán hàng",items:[["createorder","Tạo đơn hàng","plus","#059669"],["orders","Đơn hàng & Giao hàng","clip","#10b981"]]},
  {label:"IV. Nghiệp vụ",items:[["import","Nhập kho","down","#10b981"],["export","Xuất kho","up","#ef4444"],["returns","Trả hàng","back","#f59e0b"],["transfer","Chuyển kho","swap","#f97316"],["vouchers","Quản lý phiếu","file","#6366f1"],["delivery","Giao hàng","truck","#0ea5e9"],["stock","Tồn kho","cubes","#0d9488"],["stocktake","Kiểm kho","check","#059669"],["xlimport","Nhập từ Excel","file","#2563eb"]]},
  {label:"V. Tiền & Báo cáo",items:[["debts","Công nợ","coins","#eab308"],["cashflow","Thu chi","cash","#059669"],["revenue","Doanh thu","growth","#dc2626"],["report","Báo cáo","report","#10b981"],["history","Lịch sử","clock","#64748b"]]},
  {label:"VI. Biểu mẫu",items:[["templates","Lưu mẫu","folder","#eab308"]]},
@@ -420,7 +420,7 @@ function buildNav(){$("#mainNav").innerHTML=NAV.map(g=>'<div class="nav-group"><
 function go(view,param){VIEW=view;VIEWPARAM=param||null;setPage("main",1);buildNav();$("#crumb").textContent=NAV_LABEL[view]||"";
  $("#sidebar").classList.remove("open");$("#overlay").hidden=true;render();window.scrollTo(0,0)}
 function render(){const r=$("#viewRoot");const fn={dashboard:vDashboard,products:vProducts,warehouses:vWarehouses,partners:vPartners,
- orders:vOrders,cashflow:vCashflow,revenue:vRevenue,import:vTxList,export:vTxList,returns:vTxList,xlimport:vXlImport,transfer:vTxList,vouchers:vVouchers,delivery:vDelivery,stock:vStock,stocktake:vStocktake,
+ orders:vOrders,createorder:vCreateOrder,cashflow:vCashflow,revenue:vRevenue,import:vTxList,export:vTxList,returns:vTxList,xlimport:vXlImport,transfer:vTxList,vouchers:vVouchers,delivery:vDelivery,stock:vStock,stocktake:vStocktake,
  debts:vDebts,debtDetail:vDebtDetail,report:vReport,history:vHistory,templates:vTemplates,admin:vAdmin,settings:vSettings}[VIEW];
  r.innerHTML="";if(fn)fn(r);updateLowBadge()}
 function updateLowBadge(){const sm=stockMap();let low=0;const seen={};
@@ -2047,6 +2047,87 @@ html[data-theme="dark"] .xl-drop{background:rgba(255,255,255,.02);border-color:#
 .xl-drop small{color:var(--muted);font-size:11.5px}
 .xl-tpl{justify-content:center;font-weight:600}
 
+/* ===== TAB TAO DON HANG (v2.6) ===== */
+.co-layout{display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:18px;align-items:start}
+.co-main{display:grid;gap:16px;min-width:0}
+.co-sec{padding:18px}
+.co-sec-t{font-size:15.5px;font-weight:800;letter-spacing:-.01em;margin-bottom:13px}
+.co-sticky{position:sticky;top:74px}
+.co-sticky .field{margin-bottom:11px}
+.co-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px;max-height:352px;overflow-y:auto;padding:2px;scrollbar-width:thin}
+.co-card{border:1px solid var(--border);border-radius:14px;padding:11px;cursor:pointer;background:var(--card);transition:all .15s}
+.co-card:hover{border-color:var(--green);box-shadow:0 10px 22px -12px rgba(5,150,105,.45);transform:translateY(-2px)}
+.co-card.out{opacity:.62}
+.co-thumb{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#e0f2fe,#dcfce7);color:#0369a1;font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+html[data-theme="dark"] .co-thumb{background:linear-gradient(135deg,#12314f,#0d3524);color:#7dd3fc}
+.co-nm{font-weight:600;font-size:12.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px}
+.co-cd{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.co-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:8px}
+.co-pr{color:var(--green-d);font-weight:800;font-size:13px}
+.co-badge{font-size:10.5px;font-weight:700;background:#dcfce7;color:#15803d;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.co-badge.out{background:#fee2e2;color:#b91c1c}
+.co-note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+.co-warn{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);border-radius:10px;padding:9px 11px;font-size:12.5px;line-height:1.55;margin:4px 0 13px}
+.co-actions{display:grid;gap:8px}
+.co-save{justify-content:center;padding:12px;font-size:14.5px}
+.co-inv{justify-content:center;padding:11px}
+@media(max-width:1020px){.co-layout{grid-template-columns:1fr}.co-sticky{position:static}}
+
 </style>
+<script>
+/* ===== TAB TAO DON HANG (v2.6) ===== */
+let coFilter="";
+function coGridRender(){const grid=document.getElementById("coGrid");if(!grid)return;
+ const q=fold(coFilter||"");
+ const list0=allProducts().filter(p=>!q||fold(p.name).includes(q)||fold(p.code||"").includes(q)||fold(p.alias||"").includes(q));
+ const total=list0.length;const list=list0.slice(0,60);
+ grid.innerHTML=list.map(p=>{const st=totalStockOf(p.id);const out=st<=0;
+  return '<div class="co-card'+(out?" out":"")+'" onclick="coAdd(\''+p.id+'\')"><div class="co-thumb">'+esc((p.name||"?").trim().charAt(0).toUpperCase())+'</div><div class="co-nm">'+esc(p.name)+'</div><div class="co-cd">'+esc(p.code||"")+'</div><div class="co-row"><span class="co-pr">'+fmtMoney(p.price)+'</span><span class="co-badge'+(out?" out":"")+'">'+(out?"Hết hàng":"Còn "+fmtN(st)+" "+esc(p.unit||""))+'</span></div></div>'}).join("")
+  ||'<div style="grid-column:1/-1;color:var(--muted);font-size:13px;padding:10px">Không tìm thấy sản phẩm nào khớp — thử gõ tên/mã khác.</div>';
+ const note=document.getElementById("coGridNote");if(note)note.textContent="Đang hiện "+list.length+" / "+total+" sản phẩm · Bấm vào thẻ để thêm vào đơn, bấm tiếp để cộng thêm 1."}
+function coAdd(pid){const p=prodById(pid);if(!p)return;
+ const ex=formLines.find(l=>String(l.productId)===String(pid));
+ if(ex)ex.qty=(Number(ex.qty)||0)+1;
+ else{const nl={productId:p.id,name:p.name,qty:1,unit:p.unit,price:p.price};const ei=formLines.findIndex(l=>!l.productId);if(ei>=0)formLines[ei]=nl;else formLines.push(nl)}
+ renderLineRows("sales")}
+function vCreateOrder(r){docQuoteSource=null;formLines=[{productId:"",name:"",qty:"",unit:"",price:""}];coFilter="";
+ const openQuotes=DB.docs.filter(x=>x.kind==="quote"&&["draft","sent","accepted"].includes(x.status));
+ r.innerHTML='<form id="docForm"><input type="hidden" id="docf-kind" value="order"><div class="co-layout">'
+ +'<div class="co-main">'
+ +'<div class="card co-sec"><div class="co-sec-t">🧺 Chọn hàng vào đơn</div><div style="margin-bottom:10px">'+comboHTML("co-add","","Gõ mã hoặc tên sản phẩm để tìm nhanh…","product")+'</div><div class="co-grid" id="coGrid"></div><div class="co-note" id="coGridNote"></div></div>'
+ +'<div class="card co-sec"><div class="co-sec-t">📋 Dòng hàng trong đơn</div><div class="tbl-wrap"><table class="lines-tbl"><thead><tr><th>Mặt hàng *</th><th>Số lượng</th><th>ĐVT</th><th>Đơn giá bán</th><th style="text-align:right">Thành tiền</th><th></th></tr></thead><tbody id="lineRows"></tbody></table></div><button type="button" class="btn sm" style="margin-top:10px" onclick="addLine(\'sales\')">+ Thêm dòng trống</button>'
+ +'<div class="totals"><div class="trow"><span>Cộng tiền hàng:</span><span id="formTotal">0 đ</span></div><div class="trow grand"><span>Tổng thanh toán:</span><span id="docGrand">0 đ</span></div></div></div>'
+ +'</div>'
+ +'<aside class="co-side"><div class="card co-sec co-sticky"><div class="co-sec-t">🧾 Thông tin đơn hàng</div>'
+ +(openQuotes.length?'<div class="field"><label>Tạo đơn từ báo giá</label><div style="display:flex;gap:8px"><select id="docQuoteSel" style="flex:1;min-width:0"><option value="">— Không chọn báo giá —</option>'+openQuotes.map(q=>'<option value="'+q.id+'">'+esc(q.code+" · "+(partnerById(q.partnerId)?.name||"Khách lẻ")+" · "+fmtMoney(docTotal(q)))+'</option>').join("")+'</select><button type="button" class="btn" id="viewQuoteBtn" disabled>Xem</button></div></div>':"")
+ +'<div class="field"><label>Ngày *</label><input id="docf-date" type="date" value="'+todayStr()+'"></div>'
+ +'<div class="field"><label>Khách hàng</label>'+comboHTML("docf-partner","","Gõ tên khách hàng…","partner")+'<button type="button" class="btn sm" id="addCustBtn" style="margin-top:6px" onclick="document.getElementById(\'newCustWrap\').hidden=false;this.style.display=\'none\';document.getElementById(\'nc-name\').focus()">+ Thêm khách hàng mới</button></div>'
+ +'<div class="field" id="newCustWrap" hidden><div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.4);border-radius:10px;padding:10px 12px"><div style="font-weight:600;font-size:13px;margin-bottom:8px">Khách hàng mới — lưu xong sẽ tự chọn vào đơn này</div><div class="fgrid" style="grid-template-columns:1fr"><div class="field"><label>Tên khách hàng *</label><input id="nc-name" placeholder="VD: Chị Lan (Quốc Oai)"></div><div class="field"><label>Điện thoại</label><input id="nc-phone" placeholder="09xx xxx xxx"></div><div class="field"><label>Địa chỉ</label><input id="nc-addr"></div><div class="field"><label>Ghi chú</label><input id="nc-note"></div></div><div style="margin-top:8px;display:flex;gap:8px"><button type="button" class="btn primary sm" onclick="saveNewCustInline()">Lưu khách mới</button><button type="button" class="btn sm" onclick="document.getElementById(\'newCustWrap\').hidden=true;document.getElementById(\'addCustBtn\').style.display=\'\'">Đóng</button></div></div></div>'
+ +'<div class="field"><label>Chiết khấu (đ)</label><input id="docDiscount" type="number" min="0" step="any" value="0"></div>'
+ +'<div class="field"><label>Ghi chú đơn</label><input id="docf-note" value=""></div>'
+ +'<div class="co-warn">Đơn không bán quá số hàng còn trong kho — nhãn <b>“Có thể bán”</b> dưới ô số lượng cho biết tồn thực tế; vượt tồn sẽ đỏ lên và không lưu được.</div>'
+ +'<div class="co-actions"><button class="btn primary co-save" type="submit">💾 Lưu đơn hàng</button><button class="btn co-inv" type="button" id="saveAndInvoiceBtn">🧾 Lưu &amp; xuất hóa đơn</button></div>'
+ +'<div class="co-note">Đơn mới lưu ở trạng thái <b>Nháp</b> — sang mục <b>Đơn hàng</b> để Xác nhận, xuất kho và theo dõi giao hàng.</div>'
+ +'</div></aside></div></form>';
+ renderLineRows("sales");
+ const addInp=document.getElementById("co-add");
+ if(addInp){addInp.addEventListener("input",()=>{coFilter=addInp.value;coGridRender()});
+  addInp.addEventListener("combo-picked",()=>{const pid=addInp.dataset.pick;if(pid){coAdd(pid);addInp.value="";addInp.dataset.pick="";coFilter="";coGridRender()}})}
+ coGridRender();
+ const disc=document.getElementById("docDiscount");if(disc)disc.addEventListener("input",updateFormTotal);updateFormTotal();
+ const qSel=document.getElementById("docQuoteSel");
+ if(qSel){qSel.addEventListener("change",()=>{const q=DB.docs.find(x=>x.id===qSel.value);const vb=document.getElementById("viewQuoteBtn");if(vb)vb.disabled=!q;
+   if(q){docQuoteSource=q.id;const pin=document.getElementById("docf-partner");pin.value=partnerById(q.partnerId)?.name||"";pin.dataset.pick=q.partnerId||"";document.getElementById("docDiscount").value=q.discount||0;document.getElementById("docf-note").value=q.note||"";formLines=q.lines.map(l=>Object.assign({},l,{name:prodById(l.productId)?.name||""}));renderLineRows("sales");updateFormTotal()}
+   else docQuoteSource=null});
+  const vb=document.getElementById("viewQuoteBtn");if(vb)vb.addEventListener("click",()=>{if(docQuoteSource)quoteQuickView(docQuoteSource)})}
+ const form=document.getElementById("docForm");
+ form.addEventListener("submit",e=>{e.preventDefault();saveDocForm("order",null,false)});
+ const sai=document.getElementById("saveAndInvoiceBtn");if(sai)sai.addEventListener("click",()=>saveDocForm("order",null,true))}
+
+</script>
+<script>
+const _docFormOrig=docForm;
+docForm=function(kind,editId,fromQuoteId){if(kind==="order"&&!editId&&!fromQuoteId){go("createorder");return}return _docFormOrig(kind,editId,fromQuoteId)};
+</script>
 </body>
 </html>
