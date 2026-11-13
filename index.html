@@ -116,6 +116,9 @@ th.num{text-align:right}
 .combo .suggest .sc{font-weight:700;white-space:nowrap}
 .combo .suggest .sm{margin-left:auto;color:var(--muted);font-size:11.5px;white-space:nowrap}
 .lstock{font-size:11.5px;margin-top:3px;min-height:14px}
+.stk-hint{display:none;margin-top:4px;background:#1e3a5f;color:#fff;font-size:10.5px;font-weight:600;border-radius:6px;padding:2px 6px;text-align:center;line-height:1.3}
+.stk-hint.show{display:block}
+.stk-hint.over{background:#dc2626}
 .lstock.ok{color:#059669;font-weight:600}
 .lstock.over{color:#dc2626;font-weight:700}
 tr.line-over td{background:rgba(239,68,68,.07)}
@@ -301,7 +304,7 @@ const NAV=[
  {label:"I. Tổng quan",items:[["dashboard","Tổng quan","chart","#10b981"]]},
  {label:"II. Khai báo",items:[["products","Hàng hóa","box","#0ea5e9"],["warehouses","Kho hàng","wh","#6366f1"],["partners","Khách hàng","users","#eab308"]]},
  {label:"III. Bán hàng",items:[["orders","Đơn hàng & Giao hàng","clip","#10b981"]]},
- {label:"IV. Nghiệp vụ",items:[["import","Nhập kho","down","#10b981"],["export","Xuất kho","up","#ef4444"],["returns","Trả hàng","back","#f59e0b"],["transfer","Chuyển kho","swap","#f97316"],["vouchers","Quản lý phiếu","file","#6366f1"],["delivery","Giao hàng","truck","#0ea5e9"],["stock","Tồn kho","cubes","#0d9488"],["stocktake","Kiểm kho","check","#059669"]]},
+ {label:"IV. Nghiệp vụ",items:[["import","Nhập kho","down","#10b981"],["export","Xuất kho","up","#ef4444"],["returns","Trả hàng","back","#f59e0b"],["transfer","Chuyển kho","swap","#f97316"],["vouchers","Quản lý phiếu","file","#6366f1"],["delivery","Giao hàng","truck","#0ea5e9"],["stock","Tồn kho","cubes","#0d9488"],["stocktake","Kiểm kho","check","#059669"],["xlimport","Nhập từ Excel","file","#2563eb"]]},
  {label:"V. Tiền & Báo cáo",items:[["debts","Công nợ","coins","#eab308"],["cashflow","Thu chi","cash","#059669"],["revenue","Doanh thu","growth","#dc2626"],["report","Báo cáo","report","#10b981"],["history","Lịch sử","clock","#64748b"]]},
  {label:"VI. Biểu mẫu",items:[["templates","Lưu mẫu","folder","#eab308"]]},
  {label:"VII. Cấu hình",items:[["admin","Quản trị","shield","#0ea5e9"],["settings","Cài đặt","gear","#64748b"]]}
@@ -417,7 +420,7 @@ function buildNav(){$("#mainNav").innerHTML=NAV.map(g=>'<div class="nav-group"><
 function go(view,param){VIEW=view;VIEWPARAM=param||null;setPage("main",1);buildNav();$("#crumb").textContent=NAV_LABEL[view]||"";
  $("#sidebar").classList.remove("open");$("#overlay").hidden=true;render();window.scrollTo(0,0)}
 function render(){const r=$("#viewRoot");const fn={dashboard:vDashboard,products:vProducts,warehouses:vWarehouses,partners:vPartners,
- orders:vOrders,cashflow:vCashflow,revenue:vRevenue,import:vTxList,export:vTxList,returns:vTxList,transfer:vTxList,vouchers:vVouchers,delivery:vDelivery,stock:vStock,stocktake:vStocktake,
+ orders:vOrders,cashflow:vCashflow,revenue:vRevenue,import:vTxList,export:vTxList,returns:vTxList,xlimport:vXlImport,transfer:vTxList,vouchers:vVouchers,delivery:vDelivery,stock:vStock,stocktake:vStocktake,
  debts:vDebts,debtDetail:vDebtDetail,report:vReport,history:vHistory,templates:vTemplates,admin:vAdmin,settings:vSettings}[VIEW];
  r.innerHTML="";if(fn)fn(r);updateLowBadge()}
 function updateLowBadge(){const sm=stockMap();let low=0;const seen={};
@@ -613,7 +616,7 @@ function exportTxCSV(kind){const rows=[["Số phiếu","Ngày","Kho","Khách hà
 let formLines=[];
 function lineRowHTML(kind,l){const idx=formLines.indexOf(l);
  return '<tr data-li="'+idx+'"><td style="min-width:230px">'+comboHTML("lp-"+idx,l.name||"","Gõ mã hoặc tên sản phẩm…",kind==="import"?"productCost":"product")+'<div class="lstock"></div></td>'+
- '<td style="width:80px"><input class="lq" type="number" min="0" step="any" value="'+(l.qty||"")+'"></td>'+
+ '<td style="width:104px"><input class="lq" type="number" min="0" step="any" value="'+(l.qty||"")+'"><div class="stk-hint"></div></td>'+
  '<td style="width:90px"><input value="'+esc(l.unit||"")+'" class="lu" readonly tabindex="-1"></td>'+
  '<td style="width:130px"><input class="lpr" type="number" min="0" step="any" value="'+(l.price||"")+'"></td>'+
  '<td class="num lt" style="width:130px">'+fmtMoney((Number(l.qty)||0)*(Number(l.price)||0))+"</td>"+
@@ -642,12 +645,13 @@ function refreshLineStocks(kind){const mode=stockCheckMode(kind);const tb=$("#li
  const cum={};
  formLines.forEach((l,i)=>{const row=tb.querySelector('[data-li="'+i+'"]');if(!row)return;const lab=row.querySelector(".lstock");if(!lab)return;
   row.classList.remove("line-over");const qEl=row.querySelector(".lq");if(qEl)qEl.style.borderColor="";
-  if(!mode||!l.productId){lab.textContent="";lab.className="lstock";return}
+  if(!mode||!l.productId){lab.textContent="";lab.className="lstock";const h0=row.querySelector(".stk-hint");if(h0){h0.textContent="";h0.className="stk-hint"}return}
   const p=prodById(l.productId);const avail=mode==="wh"?stockOf(whId,l.productId):totalStockOf(l.productId);
   const key=String(l.productId);cum[key]=(cum[key]||0)+(Number(l.qty)||0);
   const over=cum[key]>avail;
   lab.textContent="Còn: "+fmtN(avail)+(p?" "+p.unit:"")+(over?" — không đủ! Đang cần "+fmtN(cum[key]):"");
   lab.className="lstock "+(over?"over":"ok");
+  const hint=row.querySelector(".stk-hint");if(hint){hint.textContent=(over?"Chỉ còn: ":"Có thể bán: ")+fmtN(avail)+(p?" "+p.unit:"");hint.className="stk-hint show"+(over?" over":"")}
   if(over){row.classList.add("line-over");if(qEl)qEl.style.borderColor="#ef4444"}})}
 function removeLine(btn){const tr=btn.closest("tr");const i=Number(tr.dataset.li);formLines.splice(i,1);renderLineRows($("#txf-kind")?$("#txf-kind").value:$("#docf-kind").value)}
 function addLine(kind){formLines.push({productId:"",name:"",qty:"",unit:"",price:""});renderLineRows(kind)}
@@ -1742,5 +1746,181 @@ vDashboard=function(r){
  }catch(e){}
 };
 </script>
+<script>
+/* ===== NHAP TU EXCEL / CSV (v2.3) ===== */
+if(typeof P==="object"&&!P.file)P.file='<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/>';
+let xlReports={kho:null,khach:null,don:null};
+let _xlsxPromise=null;
+function ensureXLSX(){if(window.XLSX)return Promise.resolve(true);if(_xlsxPromise)return _xlsxPromise;
+ const urls=["https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"];
+ _xlsxPromise=new Promise(res=>{let i=0;const next=()=>{if(i>=urls.length)return res(false);const s=document.createElement("script");s.src=urls[i++];s.onload=()=>res(!!window.XLSX);s.onerror=next;document.head.appendChild(s)};next()});
+ return _xlsxPromise}
+function parseCSVText(text){text=String(text).replace(/^\uFEFF/,"");const firstLine=text.split(/\r?\n/)[0]||"";const delim=(firstLine.includes(";")&&!firstLine.includes(","))?";":",";
+ const rows=[];let row=[],cur="",q=false;
+ for(let i=0;i<text.length;i++){const c=text[i];
+  if(q){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+  else if(c==='"')q=true;
+  else if(c===delim){row.push(cur);cur=""}
+  else if(c==="\n"){row.push(cur);rows.push(row);row=[];cur=""}
+  else if(c!=="\r")cur+=c}
+ if(cur!==""||row.length){row.push(cur);rows.push(row)}
+ return rows.filter(r=>r.some(c=>String(c).trim()!==""))}
+function xlReadRows(file){return new Promise((res,rej)=>{
+ if(/\.csv$/i.test(file.name)){file.text().then(t=>res(parseCSVText(t))).catch(rej);return}
+ ensureXLSX().then(ok=>{if(!ok){rej(new Error("Khong tai duoc thu vien doc Excel (can internet). Hay luu file thanh .csv roi nhap lai."));return}
+  file.arrayBuffer().then(buf=>{try{const wb=XLSX.read(buf,{type:"array",cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});res(rows.filter(r=>r.some(c=>String(c).trim()!=="")))}catch(e){rej(e)}}).catch(rej)})})}
+function xlNum(v){if(v==null)return 0;if(typeof v==="number")return v;let s=String(v).replace(/\s/g,"").replace(/₫|đ/g,"");if(!s)return 0;
+ if(/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s))s=s.replace(/\./g,"").replace(",",".");
+ else if(/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s))s=s.replace(/,/g,"");
+ else if(s.includes(",")&&!s.includes("."))s=s.replace(",",".");
+ const n=parseFloat(s);return isNaN(n)?0:n}
+function xlDate(v){if(v==null||v==="")return"";if(v instanceof Date&&!isNaN(v))return v.toISOString().slice(0,10);
+ if(typeof v==="number"&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*86400000));return d.toISOString().slice(0,10)}
+ const s=String(v).trim();const m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);if(m)return m[3]+"-"+String(m[2]).padStart(2,"0")+"-"+String(m[1]).padStart(2,"0");
+ const m2=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m2)return m2[0];return""}
+function xlPhone(v){let d=String(v==null?"":v).replace(/\D/g,"");if(d.startsWith("84")&&d.length>=11)d="0"+d.slice(2);return d}
+function xlHeaders(rows){const map={};(rows[0]||[]).forEach((h,i)=>{map[fold(String(h||"").replace(/\*/g,"").trim())]=i});return map}
+function xlGet(row,map,keys){for(const k of keys){if(map[k]!=null&&row[map[k]]!=null&&String(row[map[k]]).trim()!=="")return row[map[k]]}return""}
+const XLK={code:["ma hang","ma sp","ma san pham","sku","ma sku","code","alias","duong dan/alias","ma"],
+ pname:["ten hang","ten san pham","ten sp","san pham","hang hoa","ten"],
+ qty:["so luong","sl","qty","quantity"],
+ priceSale:["don gia","gia ban","gia","price","don gia ban"],
+ priceCost:["gia nhap","don gia nhap","gia von","don gia","gia"],
+ cust:["khach hang","ten khach hang","khach","doi tac","ten khach"],
+ phone:["sdt","so dien thoai","dien thoai","phone","phone(lien he)","lien he"],
+ addr:["dia chi","address","address1(dia chi mac dinh 1)","address1"],
+ email:["email"],tax:["ma so thue","mst","tax"],
+ note:["ghi chu","note","note(ghi chu)"],
+ date:["ngay","ngay don","ngay tao","date","ngay lap"],
+ orderNo:["so don","ma don","don hang","so chung tu","ma chung tu","order"],
+ discount:["chiet khau","giam gia","discount","tong chiet khau"],
+ supplier:["nha cung cap","ncc","supplier"],
+ type:["loai","type","loai doi tac"]};
+function xlMatchProduct(code,name){const ps=allProducts();const fc=fold(String(code||"").trim()),fn=fold(String(name||"").trim());
+ if(fc){const p=ps.find(p=>fold(p.code||"")===fc)||ps.find(p=>fold(p.alias||"")===fc);if(p)return p}
+ if(fn){const p=ps.find(p=>fold(p.name||"")===fn);if(p)return p}
+ return null}
+function xlCreatePartner(name,fields,type){const np={id:uid(),code:nextCode(type==="supplier"?"NCC":"KH"),name,type:type||"customer",phone:(fields&&fields.phone)||"",email:(fields&&fields.email)||"",address:(fields&&fields.address)||"",tax:(fields&&fields.tax)||"",note:(fields&&fields.note)||""};DB.partners.push(np);return np}
+function doImportKho(rows,opts){const map=xlHeaders(rows);const groups={};const skipped=[];
+ for(let r=1;r<rows.length;r++){const row=rows[r];
+  const p=xlMatchProduct(xlGet(row,map,XLK.code),xlGet(row,map,XLK.pname));
+  if(!p){skipped.push({row:r+1,reason:"Không tìm thấy hàng: "+(xlGet(row,map,XLK.pname)||xlGet(row,map,XLK.code)||"?")});continue}
+  const qty=xlNum(xlGet(row,map,XLK.qty));
+  if(!(qty>0)){skipped.push({row:r+1,reason:"Số lượng trống hoặc 0: "+p.name});continue}
+  const price=xlNum(xlGet(row,map,XLK.priceCost))||p.cost||p.price||0;
+  const date=xlDate(xlGet(row,map,XLK.date))||todayStr();
+  const sup=String(xlGet(row,map,XLK.supplier)||"").trim();
+  const key=date+"|"+fold(sup);
+  (groups[key]=groups[key]||{date,sup,lines:[]}).lines.push({productId:p.id,qty,price,unit:p.unit})}
+ const created=[];
+ Object.values(groups).forEach(g=>{let partnerId="";
+  if(g.sup){let sp=DB.partners.find(p=>fold(p.name)===fold(g.sup));if(!sp){sp=xlCreatePartner(g.sup,{},"supplier")}partnerId=sp?sp.id:""}
+  const tx={id:uid("t"),type:"import",code:nextCode("PN"),date:g.date,warehouseId:opts.warehouseId,partnerId,status:opts.approve?"approved":"draft",paidAmount:0,lines:g.lines,note:"Nhập từ Excel"};
+  DB.txs.push(tx);created.push(tx.code+" — "+g.lines.length+" dòng, "+fmtMoney(txTotal(tx)))});
+ if(created.length)save();
+ return{title:"Nhập kho",created,added:created.length,updated:0,skipped,warnings:[]}}
+function doImportKhach(rows){const map=xlHeaders(rows);let added=0,updated=0;const skipped=[];const created=[];
+ for(let r=1;r<rows.length;r++){const row=rows[r];
+  let name=String(xlGet(row,map,["ten khach hang","ho ten","ten","name","khach hang","last name(ho) first name(ten)"])||"").trim();
+  const fn=String(xlGet(row,map,["first name(ten)"])||"").trim(),ln=String(xlGet(row,map,["last name(ho)"])||"").trim();
+  if(!name&&(fn||ln))name=(ln+" "+fn).trim();
+  if(!name){skipped.push({row:r+1,reason:"Thiếu tên khách hàng"});continue}
+  const phone=xlPhone(xlGet(row,map,XLK.phone));
+  const addr=String(xlGet(row,map,XLK.addr)||"").trim(),email=String(xlGet(row,map,XLK.email)||"").trim(),tax=String(xlGet(row,map,XLK.tax)||"").trim(),note=String(xlGet(row,map,XLK.note)||"").trim();
+  const traw=fold(String(xlGet(row,map,XLK.type)||""));const type=(traw.includes("cung cap")||traw==="supplier"||traw==="ncc")?"supplier":((traw.includes("ca hai")||traw==="both")?"both":"customer");
+  let ex=null;if(phone)ex=DB.partners.find(p=>xlPhone(p.phone)===phone);
+  if(!ex)ex=DB.partners.find(p=>fold(p.name)===fold(name));
+  if(ex){let ch=false;const set=(k,v)=>{if(v&&String(ex[k]||"")!==String(v)){ex[k]=v;ch=true}};
+   set("name",name);set("phone",phone);set("address",addr);set("email",email);set("tax",tax);set("note",note);
+   if(ch)updated++;else skipped.push({row:r+1,reason:"Đã có, không có thông tin mới: "+name})}
+  else{const np=xlCreatePartner(name,{phone,address:addr,email,tax,note},type);if(np){added++;created.push(name)}else skipped.push({row:r+1,reason:"Không tạo được: "+name})}}
+ if(added||updated)save();
+ return{title:"Khách hàng / đối tác",created:created.slice(0,30),added,updated,skipped,warnings:[]}}
+function doImportDon(rows){const map=xlHeaders(rows);const groups={};const skipped=[];
+ for(let r=1;r<rows.length;r++){const row=rows[r];
+  const custName=String(xlGet(row,map,XLK.cust)||"").trim();
+  if(!custName){skipped.push({row:r+1,reason:"Thiếu tên khách hàng"});continue}
+  const p=xlMatchProduct(xlGet(row,map,XLK.code),xlGet(row,map,XLK.pname));
+  if(!p){skipped.push({row:r+1,reason:"Không tìm thấy hàng: "+(xlGet(row,map,XLK.pname)||xlGet(row,map,XLK.code)||"?")});continue}
+  const qty=xlNum(xlGet(row,map,XLK.qty));
+  if(!(qty>0)){skipped.push({row:r+1,reason:"Số lượng trống hoặc 0: "+p.name});continue}
+  const date=xlDate(xlGet(row,map,XLK.date))||todayStr();
+  const ono=String(xlGet(row,map,XLK.orderNo)||"").trim();
+  const key=ono?("ON:"+fold(ono)):("CN:"+fold(custName)+"|"+date);
+  const g=groups[key]=groups[key]||{custName,phone:xlPhone(xlGet(row,map,XLK.phone)),date,ono,discount:0,lines:[]};
+  const disc=xlNum(xlGet(row,map,XLK.discount));if(disc>g.discount)g.discount=disc;
+  const price=xlNum(xlGet(row,map,XLK.priceSale))||p.price||0;
+  g.lines.push({productId:p.id,qty,price,unit:p.unit})}
+ const created=[],warnings=[];
+ Object.values(groups).forEach(g=>{let pt=null;
+  if(g.phone)pt=DB.partners.find(p=>xlPhone(p.phone)===g.phone);
+  if(!pt)pt=DB.partners.find(p=>fold(p.name)===fold(g.custName));
+  if(!pt)pt=xlCreatePartner(g.custName,{phone:g.phone},"customer");
+  const doc={id:uid(),code:nextCode("DH"),kind:"order",status:"draft",sourceId:"",exportTxId:"",date:g.date,partnerId:pt?pt.id:"",discount:g.discount,note:"Nhập từ Excel"+(g.ono?" — đơn gốc: "+g.ono:""),lines:g.lines};
+  DB.docs.push(doc);created.push(doc.code+" — "+g.custName+" ("+g.lines.length+" dòng, "+fmtMoney(docTotal(doc))+")");
+  g.lines.forEach(l=>{const st=totalStockOf(l.productId);if(l.qty>st)warnings.push(doc.code+": "+(prodById(l.productId)?.name||"")+" đặt "+l.qty+" > tồn hiện có "+st)})});
+ if(created.length)save();
+ return{title:"Đơn hàng",created,added:created.length,updated:0,skipped,warnings}}
+function xlTemplate(kind){
+ if(kind==="kho")downloadCSV("mau-nhap-kho.csv",[["Mã hàng","Tên hàng","Số lượng","Giá nhập","Ngày","Nhà cung cấp"],["SKU001","Túi nilon trắng 30x45",100,1800,"13/11/2026","Công ty Bao Bì ABC"]]);
+ else if(kind==="khach")downloadCSV("mau-khach-hang.csv",[["Tên khách hàng","SĐT","Địa chỉ","Email","Mã số thuế","Ghi chú","Loại"],["Chị Lan","0901234567","123 Lê Lợi, Quận 1","","","","Khách hàng"]]);
+ else downloadCSV("mau-don-hang.csv",[["Số đơn","Ngày","Khách hàng","SĐT khách","Mã hàng","Tên hàng","Số lượng","Đơn giá","Chiết khấu"],["DH-KH001","13/11/2026","Chị Lan","0901234567","SKU001","Túi nilon trắng 30x45",50,2200,0]])}
+function xlReportHtml(rep){if(!rep)return"";
+ let h='<div style="margin-top:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;font-size:13px"><b>Kết quả nhập '+esc(rep.title)+':</b> tạo mới <b>'+(rep.added||0)+'</b>'+(rep.updated?' · cập nhật <b>'+rep.updated+'</b>':'')+' · bỏ qua <b>'+rep.skipped.length+'</b> dòng';
+ if(rep.created&&rep.created.length)h+='<div style="margin-top:6px">'+rep.created.map(c=>"• "+esc(c)).join("<br>")+'</div>';
+ if(rep.warnings&&rep.warnings.length)h+='<div style="margin-top:6px;color:#b45309"><b>Cảnh báo tồn kho:</b><br>'+rep.warnings.slice(0,15).map(w=>"• "+esc(w)).join("<br>")+'</div>';
+ if(rep.skipped.length)h+='<div style="margin-top:6px;color:#b91c1c"><b>Dòng bị bỏ qua:</b><br>'+rep.skipped.slice(0,20).map(s=>"• Dòng "+s.row+": "+esc(s.reason)).join("<br>")+(rep.skipped.length>20?"<br>… và "+(rep.skipped.length-20)+" dòng nữa":"")+'</div>';
+ return h+"</div>"}
+function xlRun(kind,inputId){const inp=document.getElementById(inputId);const f=inp&&inp.files&&inp.files[0];
+ if(!f){toast("Chưa chọn file.");return}
+ toast("Đang đọc file "+f.name+" …");
+ xlReadRows(f).then(rows=>{if(!rows||rows.length<2){toast("File không có dữ liệu — cần dòng tiêu đề + ít nhất 1 dòng.");return}
+  let rep;
+  if(kind==="kho"){const wh=document.getElementById("xlKhoWh");rep=doImportKho(rows,{warehouseId:wh?wh.value:"",approve:(document.getElementById("xlKhoStatus")||{}).value==="approved"})}
+  else if(kind==="khach")rep=doImportKhach(rows);
+  else rep=doImportDon(rows);
+  xlReports[kind]=rep;render();toast("Nhập xong: "+rep.title+" — tạo "+(rep.added||0)+", bỏ qua "+rep.skipped.length+" dòng.")}).catch(e=>{toast("Lỗi đọc file: "+(e.message||e))});
+ inp.value=""}
+function vXlImport(r){const whOpts=DB.warehouses.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
+ const card=(title,desc,extra,btns,rep)=>'<div class="card" style="margin-bottom:14px"><div class="card-t">'+title+'</div><div style="font-size:12.5px;color:#64748b;margin:6px 0 10px">'+desc+'</div>'+(extra||"")+'<div style="display:flex;gap:8px;flex-wrap:wrap">'+btns+'</div>'+xlReportHtml(rep)+'</div>';
+ r.innerHTML='<div style="font-size:13px;color:#64748b;margin-bottom:12px">Đọc file <b>.xlsx / .xls / .csv</b>. Hàng hóa được khớp theo <b>Mã hàng (SKU)</b> hoặc <b>Tên hàng</b> — dòng nào không khớp sẽ được liệt kê rõ để sửa lại file. Bấm <b>Tải file mẫu</b> để lấy đúng cột cần điền.</div>'
+ +card("1 · Nhập kho hàng loạt","Mỗi dòng = 1 mặt hàng nhập. Cột: <b>Mã hàng · Tên hàng · Số lượng · Giá nhập · Ngày · Nhà cung cấp</b>. Các dòng cùng Ngày + cùng Nhà cung cấp được gom thành 1 phiếu nhập.",
+   DB.warehouses.length?'<div class="fgrid" style="margin-bottom:10px"><div class="field"><label>Nhập vào kho</label><select id="xlKhoWh">'+whOpts+'</select></div><div class="field"><label>Trạng thái phiếu sau khi nhập</label><select id="xlKhoStatus"><option value="draft">Chờ duyệt (kiểm tra rồi duyệt sau)</option><option value="approved">Duyệt luôn (cộng tồn ngay)</option></select></div></div>':'<div style="color:#b91c1c;font-size:12.5px;margin-bottom:10px">Chưa có kho nào — tạo kho ở mục Kho trước.</div>',
+   '<button class="btn ghost" onclick="xlTemplate(\'kho\')">⬇ Tải file mẫu</button><label class="btn" style="cursor:pointer">📥 Chọn file Excel / CSV<input id="xlf-kho" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="xlRun(\'kho\',\'xlf-kho\')"></label>',xlReports.kho)
+ +card("2 · Cập nhật danh sách khách hàng","Mỗi dòng = 1 khách / nhà cung cấp. Cột: <b>Tên khách hàng · SĐT · Địa chỉ · Email · Mã số thuế · Ghi chú · Loại</b> (Khách hàng / Nhà cung cấp / Cả hai). Khách đã có (trùng SĐT hoặc trùng tên) sẽ được <b>cập nhật</b> thông tin mới, chưa có thì <b>thêm mới</b>. File xuất từ Sapo (có cột Họ / Tên riêng, SĐT dạng +84…) cũng đọc được.",
+   "",
+   '<button class="btn ghost" onclick="xlTemplate(\'khach\')">⬇ Tải file mẫu</button><label class="btn" style="cursor:pointer">📥 Chọn file Excel / CSV<input id="xlf-khach" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="xlRun(\'khach\',\'xlf-khach\')"></label>',xlReports.khach)
+ +card("3 · Tạo đơn hàng hàng loạt","Mỗi dòng = 1 dòng hàng trong đơn. Cột: <b>Số đơn · Ngày · Khách hàng · SĐT khách · Mã hàng · Tên hàng · Số lượng · Đơn giá · Chiết khấu</b>. Các dòng cùng <b>Số đơn</b> (hoặc cùng khách + cùng ngày nếu không có cột Số đơn) gom thành 1 đơn. Đơn tạo ở trạng thái <b>nháp</b> để kiểm tra trước khi Xác nhận. Khách chưa có trong danh sách sẽ được tạo mới tự động.",
+   "",
+   '<button class="btn ghost" onclick="xlTemplate(\'don\')">⬇ Tải file mẫu</button><label class="btn" style="cursor:pointer">📥 Chọn file Excel / CSV<input id="xlf-don" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="xlRun(\'don\',\'xlf-don\')"></label>',xlReports.don)}
+
+</script>
+<script>
+/* ===== FORM DON HANG 2 COT (v2.3): trai = dong hang, phai = khach hang ===== */
+(function(){const st=document.createElement("style");st.textContent=
+'.ord-layout{display:grid;grid-template-columns:minmax(0,1fr) 350px;grid-template-areas:"main side";gap:18px;align-items:start}'
++'.ord-main{grid-area:main;min-width:0}'
++'.ord-side{grid-area:side;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px}'
++'.ord-side>.fgrid{grid-template-columns:1fr}'
++'.ord-side .card{margin-bottom:12px}'
++'@media(max-width:900px){.ord-layout{grid-template-columns:1fr;grid-template-areas:"side" "main"}}';
+document.head.appendChild(st)})();
+function ordArrange(){const form=document.getElementById("docForm");if(!form)return;const mb=form.querySelector(".mbody");if(!mb||mb.dataset.ord)return;mb.dataset.ord="1";
+ const layout=document.createElement("div");layout.className="ord-layout";
+ const main=document.createElement("div");main.className="ord-main";
+ const side=document.createElement("div");side.className="ord-side";
+ const card=mb.querySelector(":scope>.card");if(card)side.appendChild(card);
+ const fg=mb.querySelector(".fgrid");
+ if(fg){const wf=[...fg.querySelectorAll(".field")].find(f=>f.textContent.includes("Đơn không được bán quá"));if(wf)main.appendChild(wf);side.appendChild(fg)}
+ [".section-title",".tbl-wrap",".totals"].forEach(sel=>{const el=mb.querySelector(":scope>"+sel);if(el)main.appendChild(el)});
+ const addBtn=[...mb.children].find(el=>el.tagName==="BUTTON"&&(el.getAttribute("onclick")||"").includes("addLine"));const totals=main.querySelector(".totals");
+ if(addBtn){if(totals)main.insertBefore(addBtn,totals);else main.appendChild(addBtn)}
+ layout.appendChild(main);layout.appendChild(side);mb.appendChild(layout)}
+(function(){const root=document.getElementById("modalRoot");if(!root)return;
+ const obs=new MutationObserver(()=>{if(document.getElementById("docForm"))ordArrange()});
+ obs.observe(root,{childList:true,subtree:false})})();
+
+</script>
+<style id="pc-fullwidth">@media(min-width:1024px){.content{max-width:none}}@media(min-width:901px){.modal.wide{max-width:97vw}}</style>
 </body>
 </html>
