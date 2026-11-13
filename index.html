@@ -316,7 +316,7 @@ const LS_KEY="ql_ban_hang_baobi_v2";
 let DB=null, PRODUCTS=[];
 function blankDB(){return{warehouses:[],partners:[],txs:[],docs:[],payments:[],debtAdjustments:[],stockAdjustments:[],stocktakes:[],logs:[],templates:[],cashEntries:[],
  users:[{id:"u1",username:"admin",password:"1234",name:"Quản trị viên",role:"admin"}],
- settings:{company:"BAO BÌ & ĐỒ DÙNG 1 LẦN",address:"",phone:"",tax:""},
+ settings:{company:"BAO BÌ & ĐỒ DÙNG 1 LẦN",address:"",phone:"",tax:"",bankBin:"",bankAccount:"",bankName:""},
  seq:{PN:0,PX:0,PC:0,TD:0,BG:0,DH:0,HD:0,KH:0,NCC:0,HH:734,KHOK:0,KK:0,DCT:0},productEdits:{},extraProducts:[],theme:"light"}}
 function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB))}catch(e){}}
 function loadDB(){try{const raw=localStorage.getItem(LS_KEY);if(raw){DB=JSON.parse(raw);if(!Array.isArray(DB.debtAdjustments))DB.debtAdjustments=[];if(!Array.isArray(DB.stockAdjustments))DB.stockAdjustments=[];if(!Array.isArray(DB.stocktakes))DB.stocktakes=[];if(!Array.isArray(DB.cashEntries))DB.cashEntries=[];mergeSeedPartners();return}}catch(e){}DB=blankDB();mergeSeedPartners();save()}
@@ -1477,10 +1477,10 @@ function vSettings(r){const s=DB.settings;
  '<div class="field"><label>Địa chỉ</label><input id="sf-addr" value="'+esc(s.address)+'"></div>'+
  '<div class="field"><label>Điện thoại</label><input id="sf-phone" value="'+esc(s.phone)+'"></div>'+
  '<div class="field"><label>Mã số thuế</label><input id="sf-tax" value="'+esc(s.tax)+'"></div>'+
- '</div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Lưu cài đặt</button>'+
+ '<div class="field"><label>Ngân hàng nhận tiền (VietQR)</label><select id="sf-bankbin">'+bankOptions(s.bankBin)+'</select></div><div class="field"><label>Số tài khoản</label><input id="sf-bankacc" value="'+esc(s.bankAccount||"")+'" placeholder="VD: 12345678901"></div><div class="field full"><label>Tên chủ tài khoản</label><input id="sf-bankname" value="'+esc(s.bankName||"")+'" placeholder="Viết IN HOA không dấu, như trên tài khoản ngân hàng"></div><div class="field full" style="font-size:12.5px;color:var(--muted)">Điền đủ ngân hàng + số tài khoản: khi in <b>hóa đơn A5</b> mà đơn còn nợ, app tự in mã <b>VietQR</b> chứa đúng số tiền cần thanh toán để khách quét trả. Báo giá không hiện mã QR.</div></div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Lưu cài đặt</button>'+
  '<button class="btn" type="button" onclick="resetTrial()">Đặt lại dữ liệu dùng thử</button></div>'+
  '<p style="font-size:12.5px;color:var(--muted)">“Đặt lại dữ liệu dùng thử” xóa toàn bộ phiếu, đơn hàng, công nợ đã nhập trên máy này (giữ nguyên 734 sản phẩm gốc) để bắt đầu thử lại từ đầu.</p></form></div></div>';
- $("#setForm").addEventListener("submit",e=>{e.preventDefault();DB.settings={company:$("#sf-company").value.trim(),address:$("#sf-addr").value.trim(),phone:$("#sf-phone").value.trim(),tax:$("#sf-tax").value.trim()};save();toast("Đã lưu cài đặt.")})}
+ $("#setForm").addEventListener("submit",e=>{e.preventDefault();DB.settings={company:$("#sf-company").value.trim(),address:$("#sf-addr").value.trim(),phone:$("#sf-phone").value.trim(),tax:$("#sf-tax").value.trim(),bankBin:$("#sf-bankbin").value,bankAccount:$("#sf-bankacc").value.trim(),bankName:$("#sf-bankname").value.trim()};save();toast("Đã lưu cài đặt.")})}
 function resetTrial(){askConfirm("Đặt lại dữ liệu dùng thử","Xóa toàn bộ dữ liệu đã nhập trên máy này và quay về trạng thái ban đầu?",()=>{const theme=DB.theme;DB=blankDB();DB.theme=theme;save();render();toast("Đã đặt lại dữ liệu dùng thử.")})}
 /* ================= Printing ================= */
 function sheetHead(title,code,dateStr,bare){const s=DB.settings;
@@ -1522,7 +1522,7 @@ function printDoc(id){const d=DB.docs.find(x=>x.id===id);if(!d)return;
   ? '<div style="text-align:right;margin-top:8px">'+((d.discount||0)>0?"Chiết khấu: <b>"+fmtN(d.discount)+" đ</b><br>":"")+'Tổng thanh toán: <b>'+fmtN(tot)+" đ</b></div>"
   : '<div class="ptotals" style="text-align:right;margin-top:8px;line-height:1.65">'+((d.discount||0)>0?"Chiết khấu: <b>-"+fmtN(d.discount)+" đ</b><br>":"")+'Tổng tiền: <b>'+fmtN(tot)+' đ</b><br>Đã trả: <b>'+fmtN(docPaid(d))+' đ</b><br>Còn nợ: <b>'+fmtN(Math.max(0,tot-docPaid(d)))+" đ</b></div>"+(isOrder?"":printPayTable(d)))+
  (isOrder?"":'<div style="font-style:italic;margin-top:6px">Bằng chữ (tổng tiền): '+esc(moneyWords(tot))+"</div>")+
- (isOrder?signs2HTML("Người lập","Khách hàng"):signsHTML("Người lập","Khách hàng","Giám đốc"))+
+ vietqrBlock(d)+(isOrder?signs2HTML("Người lập","Khách hàng"):signsHTML("Người lập","Khách hàng","Giám đốc"))+
  '<div style="margin-top:14px;display:flex;gap:8px;justify-content:center" class="noprint"></div></div>'+
  '<div class="print-controls" style="text-align:center;margin-top:10px;font-family:Inter,sans-serif;font-size:12px">Khổ giấy: <button onclick="setDocPaper(\''+id+'\',\'A5\')">A5</button> <button onclick="setDocPaper(\''+id+'\',\'A4\')">A4</button> — chọn xong bấm In của trình duyệt (Ctrl+P) hoặc nút In bên dưới. <button onclick=\"doPrint()\">In ngay</button></div>';
  toast("Đã mở bản in "+d.code+" (khổ "+paper+"). Bấm Ctrl+P hoặc nút In ngay trong bản in nếu chưa thấy hộp thoại in.");doPrint()}
@@ -2178,6 +2178,19 @@ const _docDetailOrig=docDetail;
 docDetail=function(id){_docDetailOrig(id);const foot=document.querySelector("#modalRoot .mfoot");if(!foot)return;
  const b=document.createElement("button");b.className="btn";b.textContent="📩 Gửi Zalo";b.onclick=()=>shareDocZalo(id);
  foot.insertBefore(b,foot.lastChild)};
+
+</script>
+<script>
+/* ===== VIETQR TREN HOA DON A5 (v2.8) ===== */
+const VIETQR_BANKS=[["970436","Vietcombank"],["970415","VietinBank"],["970418","BIDV"],["970405","Agribank"],["970407","Techcombank"],["970422","MB Bank"],["970416","ACB"],["970432","VPBank"],["970423","TPBank"],["970403","Sacombank"],["970443","SHB"],["970441","VIB"],["970437","HDBank"],["970448","OCB"],["970426","MSB"],["970431","Eximbank"],["970468","SeABank"],["970412","PVcomBank"],["970414","OceanBank"],["970440","Viet A Bank"]];
+function bankOptions(sel){return '<option value="">— Chưa chọn ngân hàng —</option>'+VIETQR_BANKS.map(b=>'<option value="'+b[0]+'"'+(String(sel||"")===b[0]?" selected":"")+">"+b[1]+" ("+b[0]+")</option>").join("")}
+function bankLabel(bin){const b=VIETQR_BANKS.find(x=>x[0]===String(bin||""));return b?b[1]:("Ngân hàng "+(bin||""))}
+function vietqrBlock(d){if(d.kind!=="invoice")return "";
+ const s=DB.settings||{};const bin=(s.bankBin||"").trim(),acc=(s.bankAccount||"").trim(),name=(s.bankName||"").trim();
+ if(!bin||!acc)return "";
+ const debt=Math.max(0,docTotal(d)-docPaid(d));if(debt<=0)return "";
+ const url="https://img.vietqr.io/image/"+bin+"-"+encodeURIComponent(acc)+"-compact.svg?amount="+debt+"&addInfo="+encodeURIComponent("Thanh toan "+d.code)+"&accountName="+encodeURIComponent(name);
+ return '<div style="margin-top:12px;text-align:center;border:1px solid #cbd5e1;border-radius:10px;padding:10px"><div style="font-weight:700;font-size:13px">QUÉT MÃ VIETQR ĐỂ THANH TOÁN</div><img src="'+url+'" alt="VietQR" style="width:150px;height:auto;margin:6px auto;display:block"><div style="font-size:12px;line-height:1.6">'+esc(bankLabel(bin))+" · STK: <b>"+esc(acc)+"</b>"+(name?"<br>Chủ tài khoản: <b>"+esc(name)+"</b>":"")+"<br>Số tiền: <b>"+fmtN(debt)+" đ</b> · Nội dung: <b>Thanh toan "+esc(d.code)+"</b></div></div>"}
 
 </script>
 </body>
