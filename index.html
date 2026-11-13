@@ -304,7 +304,7 @@ const ADJUST='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const NAV=[
  {label:"I. Tổng quan",items:[["dashboard","Tổng quan","chart","#10b981"]]},
  {label:"II. Khai báo",items:[["products","Hàng hóa","box","#0ea5e9"],["warehouses","Kho hàng","wh","#6366f1"],["partners","Khách hàng","users","#eab308"]]},
- {label:"III. Bán hàng",items:[["createorder","Tạo đơn hàng","plus","#059669"],["orders","Đơn hàng & Giao hàng","clip","#10b981"]]},
+ {label:"III. Bán hàng",items:[["quotes","Báo giá","file","#2563eb"],["createorder","Tạo đơn hàng","plus","#059669"],["orders","Đơn hàng & Giao hàng","clip","#10b981"],["invoices","Hóa đơn","report","#dc2626"]]},
  {label:"IV. Nghiệp vụ",items:[["import","Nhập kho","down","#10b981"],["export","Xuất kho","up","#ef4444"],["returns","Trả hàng","back","#f59e0b"],["transfer","Chuyển kho","swap","#f97316"],["vouchers","Quản lý phiếu","file","#6366f1"],["delivery","Giao hàng","truck","#0ea5e9"],["stock","Tồn kho","cubes","#0d9488"],["stocktake","Kiểm kho","check","#059669"],["xlimport","Nhập từ Excel","file","#2563eb"]]},
  {label:"V. Tiền & Báo cáo",items:[["debts","Công nợ","coins","#eab308"],["cashflow","Thu chi","cash","#059669"],["revenue","Doanh thu","growth","#dc2626"],["report","Báo cáo","report","#10b981"],["history","Lịch sử","clock","#64748b"]]},
  {label:"VI. Biểu mẫu",items:[["templates","Lưu mẫu","folder","#eab308"]]},
@@ -421,7 +421,7 @@ function buildNav(){$("#mainNav").innerHTML=NAV.map(g=>'<div class="nav-group"><
 function go(view,param){VIEW=view;VIEWPARAM=param||null;setPage("main",1);buildNav();$("#crumb").textContent=NAV_LABEL[view]||"";
  $("#sidebar").classList.remove("open");$("#overlay").hidden=true;render();window.scrollTo(0,0)}
 function render(){const r=$("#viewRoot");const fn={dashboard:vDashboard,products:vProducts,warehouses:vWarehouses,partners:vPartners,
- orders:vOrders,createorder:vCreateOrder,cashflow:vCashflow,revenue:vRevenue,import:vTxList,export:vTxList,returns:vTxList,xlimport:vXlImport,transfer:vTxList,vouchers:vVouchers,delivery:vDelivery,stock:vStock,stocktake:vStocktake,
+ orders:vOrders,createorder:vCreateOrder,quotes:r=>vOrders(r,"quote"),invoices:vInvoices,cashflow:vCashflow,revenue:vRevenue,import:vTxList,export:vTxList,returns:vTxList,xlimport:vXlImport,transfer:vTxList,vouchers:vVouchers,delivery:vDelivery,stock:vStock,stocktake:vStocktake,
  debts:vDebts,debtDetail:vDebtDetail,report:vReport,history:vHistory,templates:vTemplates,admin:vAdmin,settings:vSettings}[VIEW];
  r.innerHTML="";if(fn)fn(r);updateLowBadge()}
 function updateLowBadge(){const sm=stockMap();let low=0;const seen={};
@@ -1100,9 +1100,9 @@ function docPayBadge(d){const s=docPayStatus(d);return s?'<span class="badge '+s
 function payMethodLabel(m){return m==="bank"?"Chuyển khoản":m==="other"?"Khác":"Tiền mặt"}
 function docKindLabel(k){return k==="quote"?"Báo giá":k==="order"?"Đơn hàng":"Hóa đơn nội bộ"}
 let docQ="",docStatusFilter="",ordDelivFilter="";
-function vOrders(r){
- const tabs='<div class="tabs"><button class="'+(salesTab==="orders"?"on":"")+'" onclick="salesSetTab(\'orders\')">Đơn hàng</button><button class="'+(salesTab==="quotes"?"on":"")+'" onclick="salesSetTab(\'quotes\')">Báo giá</button></div>';
- const kind=salesTab==="orders"?"order":"quote";
+function vOrders(r,lockKind){
+ const tabs=lockKind?"":'<div class="tabs"><button class="'+(salesTab==="orders"?"on":"")+'" onclick="salesSetTab(\'orders\')">Đơn hàng</button><button class="'+(salesTab==="quotes"?"on":"")+'" onclick="salesSetTab(\'quotes\')">Báo giá</button></div>';
+ const kind=lockKind||(salesTab==="orders"?"order":"quote");
  let rows=DB.docs.filter(d=>d.kind===kind).filter(d=>(!docStatusFilter||d.status===docStatusFilter)&&(!docQ||fold(d.code).includes(fold(docQ))||fold(partnerById(d.partnerId)?.name||"").includes(fold(docQ))));
  let delivCounts=null;
  if(kind==="order"){delivCounts={all:rows.length,noexport:0,pending:0,shipping:0,delivered:0};rows.forEach(d=>{const od=orderDelivery(d);if(od)delivCounts[od.k]++});
@@ -2129,6 +2129,56 @@ function vCreateOrder(r){docQuoteSource=null;formLines=[{productId:"",name:"",qt
 <script>
 const _docFormOrig=docForm;
 docForm=function(kind,editId,fromQuoteId){if(kind==="order"&&!editId&&!fromQuoteId){go("createorder");return}return _docFormOrig(kind,editId,fromQuoteId)};
+</script>
+<script>
+/* ===== MUC HOA DON RIENG + GUI ZALO (v2.7, theo mau Son Bao An) ===== */
+let invQ="";
+function invStat(label,val,sub,cls){return '<div class="card stat '+(cls||"")+'"><div class="sl">'+label+'</div><div class="sv">'+val+'</div><div class="ss">'+sub+"</div></div>"}
+function invIssue(){const sel=document.getElementById("invFromOrder");if(!sel||!sel.value){toast("Chưa chọn đơn hàng để xuất hóa đơn.",true);return}
+ const inv=convertDoc(sel.value,"invoice");if(inv){render();printDoc(inv.id)}}
+function vInvoices(r){
+ const all=DB.docs.filter(d=>d.kind==="invoice");
+ const rows=all.filter(d=>{if(!invQ)return true;const q=fold(invQ);const src=DB.docs.find(x=>x.id===d.sourceId);return fold(d.code).includes(q)||fold(partnerById(d.partnerId)?.name||"").includes(q)||fold(src?.code||"").includes(q)});
+ const tot=all.filter(d=>d.status!=="cancelled").reduce((s,d)=>s+docTotal(d),0);
+ const paid=all.filter(d=>d.status!=="cancelled").reduce((s,d)=>s+Math.min(docTotal(d),docPaid(d)),0);
+ const candidates=DB.docs.filter(d=>d.kind==="order"&&d.status!=="cancelled"&&!DB.docs.some(x=>x.kind==="invoice"&&x.sourceId===d.id&&x.status!=="cancelled"));
+ r.innerHTML='<div class="stats">'
+ +invStat("Tổng số hóa đơn",fmtN(all.length),"Đã xuất từ đơn hàng","green")
+ +invStat("Tổng tiền hóa đơn",fmtMoney(tot),"Không tính hóa đơn đã hủy","")
+ +invStat("Đã thu",fmtMoney(paid),"Theo thanh toán của đơn gốc","")
+ +invStat("Còn nợ trên hóa đơn",fmtMoney(Math.max(0,tot-paid)),"Cần thu tiếp","warn")
+ +'</div>'
+ +'<div class="card" style="margin-bottom:12px"><div class="chead">Xuất hóa đơn mới từ đơn hàng</div><div class="cbody"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="invFromOrder" style="flex:1;min-width:240px"><option value="">— Chọn đơn hàng chưa có hóa đơn —</option>'
+ +candidates.map(d=>'<option value="'+d.id+'">'+esc(d.code+" · "+fmtDate(d.date)+" · "+(partnerById(d.partnerId)?.name||"Khách lẻ")+" · "+fmtMoney(docTotal(d)))+'</option>').join("")
+ +'</select><button class="btn primary" onclick="invIssue()">🧾 Xuất hóa đơn</button></div><div style="font-size:12.5px;color:var(--muted);margin-top:8px">Xuất xong app mở ngay bản in hóa đơn (mặc định khổ A5, đổi sang A4 trong bản in). Mỗi đơn chỉ có 1 hóa đơn đang hiệu lực.</div></div></div>'
+ +'<div class="card"><div class="chead">Danh sách hóa đơn <span class="badge b-gray">'+rows.length+'</span></div><div class="cbody">'
+ +'<div class="toolbar"><div class="grow"><input id="invSearch" placeholder="Tìm theo số hóa đơn, số đơn gốc, khách hàng…" value="'+esc(invQ)+'"></div></div>'
+ +'<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Số hóa đơn</th><th>Ngày</th><th>Từ đơn</th><th>Khách hàng</th><th class="num">Tổng tiền</th><th class="num">Đã thu</th><th class="num">Còn nợ</th><th>Trạng thái</th><th></th></tr></thead><tbody>'
+ +(rows.map(d=>{const t=docTotal(d);const p=Math.min(t,docPaid(d));const src=DB.docs.find(x=>x.id===d.sourceId);
+   return '<tr><td><b>'+esc(d.code)+'</b></td><td>'+fmtDate(d.date)+'</td><td>'+(src?'<a href="javascript:void(0)" onclick="docDetail(\''+src.id+'\')">'+esc(src.code)+'</a>':"—")+'</td><td>'+esc(partnerById(d.partnerId)?.name||"Khách lẻ")+'</td><td class="num">'+fmtMoney(t)+'</td><td class="num">'+fmtMoney(p)+'</td><td class="num">'+fmtMoney(Math.max(0,t-p))+'</td><td>'+docBadge(d)+'</td><td style="white-space:nowrap"><button class="btn sm" onclick="docDetail(\''+d.id+'\')">Xem</button> <button class="btn sm" onclick="printDoc(\''+d.id+'\')">In</button> <button class="btn sm" onclick="shareDocZalo(\''+d.id+'\')">📩 Zalo</button></td></tr>'}).join("")
+ ||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:18px">Chưa có hóa đơn nào — chọn 1 đơn hàng ở khung trên để xuất hóa đơn đầu tiên.</td></tr>')
+ +'</tbody></table></div></div></div>';
+ const s=document.getElementById("invSearch");if(s)s.addEventListener("input",()=>{invQ=s.value;const st=s.selectionStart;render();const n=document.getElementById("invSearch");if(n){n.focus();n.setSelectionRange(st,st)}})}
+/* Gui noi dung bao gia / hoa don qua Zalo (theo mau Son Bao An) */
+function shareDocZalo(id){const d=DB.docs.find(x=>x.id===id);if(!d)return;
+ const cust=partnerById(d.partnerId);const isQ=d.kind==="quote";const tot=docTotal(d);
+ const L=[];L.push((isQ?"BẢNG BÁO GIÁ ":"HOÁ ĐƠN BÁN HÀNG ")+d.code+" — "+(DB.settings.company||"Bao Bì & Đồ Dùng 1 Lần"));
+ L.push("Khách: "+(cust?.name||"Khách lẻ")+" · Ngày: "+fmtDate(d.date));
+ d.lines.forEach((l,i)=>{const p=prodById(l.productId);L.push((i+1)+". "+(p?p.name:"")+" — "+(l.unit||p?.unit||"")+" × "+fmtN(l.qty)+" × "+fmtN(l.price)+"đ = "+fmtN(l.qty*l.price)+"đ")});
+ if((d.discount||0)>0)L.push("Chiết khấu: -"+fmtN(d.discount)+"đ");
+ L.push("Tổng cộng: "+fmtN(tot)+"đ");
+ if(isQ)L.push("Báo giá có hiệu lực "+(d.validUntil?("đến "+fmtDate(d.validUntil)):"trong 7 ngày")+".");
+ else{const pd=Math.min(tot,docPaid(d));L.push("Đã thu: "+fmtN(pd)+"đ · Còn nợ: "+fmtN(Math.max(0,tot-pd))+"đ")}
+ if(d.note)L.push("Ghi chú: "+d.note);
+ const txt=L.join("\n");
+ const done=()=>{const sdt=(cust?.phone||"").replace(/[^0-9]/g,"");if(sdt)window.open("https://zalo.me/"+sdt,"_blank");toast("Đã chép nội dung "+(isQ?"báo giá":"hóa đơn")+" — mở Zalo của khách, dán vào rồi gửi.")};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(done);else done()}
+/* Them nut Gui Zalo vao chan cua so chi tiet chung tu */
+const _docDetailOrig=docDetail;
+docDetail=function(id){_docDetailOrig(id);const foot=document.querySelector("#modalRoot .mfoot");if(!foot)return;
+ const b=document.createElement("button");b.className="btn";b.textContent="📩 Gửi Zalo";b.onclick=()=>shareDocZalo(id);
+ foot.insertBefore(b,foot.lastChild)};
+
 </script>
 </body>
 </html>
