@@ -1133,7 +1133,7 @@ function docForm(kind,editId,fromQuoteId){const d=editId?DB.docs.find(x=>x.id===
  '<div class="fgrid">'+
  '<div class="field"><label>Ngày *</label><input id="docf-date" type="date" value="'+(d?d.date:todayStr())+'" required></div>'+
  (kind==="quote"?'<div class="field"><label>Hiệu lực đến</label><input id="docf-valid" type="date" value="'+(d?d.validUntil||"":"")+'"></div>':"")+
- '<div class="field"><label>Khách hàng (gõ tên — khách mới sẽ tự được thêm)</label>'+comboHTML("docf-partner",base?partnerById(base.partnerId)?.name||"":"","Gõ tên khách hàng…","partner")+"</div>"+
+ '<div class="field"><label>Khách hàng</label>'+comboHTML("docf-partner",base?partnerById(base.partnerId)?.name||"":"","Gõ tên khách hàng…","partner")+'<button type="button" class="btn sm" id="addCustBtn" style="margin-top:6px" onclick="document.getElementById(\'newCustWrap\').hidden=false;this.style.display=\'none\';document.getElementById(\'nc-name\').focus()">+ Thêm khách hàng mới</button></div>'+'<div class="field full" id="newCustWrap" hidden><div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.4);border-radius:10px;padding:10px 12px">'+'<div style="font-weight:600;font-size:13px;margin-bottom:8px">Khách hàng mới — lưu xong sẽ tự chọn vào đơn này</div>'+'<div class="fgrid">'+'<div class="field"><label>Tên khách hàng *</label><input id="nc-name" placeholder="VD: Chị Lan (Quốc Oai)"></div>'+'<div class="field"><label>Điện thoại</label><input id="nc-phone" placeholder="09xx xxx xxx"></div>'+'<div class="field"><label>Địa chỉ</label><input id="nc-addr"></div>'+'<div class="field"><label>Ghi chú</label><input id="nc-note"></div>'+'</div><div style="margin-top:8px;display:flex;gap:8px">'+'<button type="button" class="btn primary sm" onclick="saveNewCustInline()">Lưu khách mới</button>'+'<button type="button" class="btn sm" onclick="document.getElementById(\'newCustWrap\').hidden=true;document.getElementById(\'addCustBtn\').style.display=\'\'">Đóng</button>'+'</div></div></div>'+
  '<div class="field"><label>Chiết khấu (đ)</label><input id="docDiscount" type="number" min="0" step="any" value="'+(base?base.discount||0:0)+'"></div>'+
  '<div class="field full"><label>Ghi chú</label><input id="docf-note" value="'+esc(base?(base.note||""):"")+'"></div>'+
  (kind==="order"?'<div class="field full"><div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);border-radius:8px;padding:8px 10px;font-size:12.5px">Đơn không được bán quá số hàng còn trong kho: mỗi dòng hiện <b>“Còn: X”</b> ngay dưới tên hàng — dòng nào thiếu hàng sẽ đỏ lên và không lưu được. Hàng chưa có tồn thì vào mục <b>Tồn kho</b> nhập tồn đầu trước.</div></div>':"")+
@@ -1630,6 +1630,24 @@ function cashForm(editId){
 }
 function deleteCash(id){const e=(DB.cashEntries||[]).find(x=>x.id===id);if(!e)return;askConfirm("Xóa phiếu thu chi","Xóa "+(e.code||"phiếu")+" · "+fmtMoney(e.amount)+"?",()=>{DB.cashEntries=DB.cashEntries.filter(x=>x.id!==id);logAct("Xóa thu chi",(e.code||"")+" · "+fmtMoney(e.amount));save();render()})}
 function exportCashCSV(){const rows=[["Ngày","Số phiếu","Nguồn","Loại","Hạng mục","Người/đối tác","Hình thức","Thu","Chi","Ghi chú"]];cfEvents().forEach(e=>rows.push([fmtDate(e.date),e.code,e.source,e.kind==="thu"?"Thu":"Chi",e.cat,e.party,cfMethodLabel(e.method),e.kind==="thu"?e.amount:"",e.kind==="chi"?e.amount:"",e.note]));downloadCSV("so-thu-chi.csv",rows)}
+
+/* ---------- Thêm khách mới ngay trong form đơn hàng / báo giá ---------- */
+function saveNewCustInline(){
+ const nameEl=$("#nc-name");if(!nameEl)return;
+ const name=nameEl.value.trim();
+ if(!name){toast("Nhập tên khách hàng mới.",true);nameEl.focus();return}
+ const phone=$("#nc-phone").value.trim(),addr=$("#nc-addr").value.trim(),note=$("#nc-note").value.trim();
+ const pin=$("#docf-partner");
+ const found=DB.partners.find(p=>p.type!=="supplier"&&fold(p.name)===fold(name));
+ if(found){if(pin){pin.value=found.name;pin.dataset.pick=found.id}
+  const w=$("#newCustWrap");if(w)w.hidden=true;const b=$("#addCustBtn");if(b)b.style.display="";
+  toast("Khách này đã có trong danh sách — đã chọn sẵn vào đơn.");return}
+ const np={id:uid(),code:nextCode("KH"),name,type:"customer",phone,email:"",address:addr,tax:"",note};
+ DB.partners.push(np);logAct("Thêm khách hàng",np.code+" — "+name+" (thêm ngay trong form lập đơn)");save();
+ if(pin){pin.value=name;pin.dataset.pick=np.id}
+ const w=$("#newCustWrap");if(w)w.hidden=true;const b=$("#addCustBtn");if(b)b.style.display="";
+ toast("Đã thêm khách mới "+np.code+" — "+name+" và chọn vào đơn.");
+}
 
 /* ---------- Doanh thu ---------- */
 let revPreset="month";
