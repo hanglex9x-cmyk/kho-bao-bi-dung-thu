@@ -1871,29 +1871,40 @@ function xlReportHtml(rep){if(!rep)return"";
  if(rep.warnings&&rep.warnings.length)h+='<div style="margin-top:6px;color:#b45309"><b>Cảnh báo tồn kho:</b><br>'+rep.warnings.slice(0,15).map(w=>"• "+esc(w)).join("<br>")+'</div>';
  if(rep.skipped.length)h+='<div style="margin-top:6px;color:#b91c1c"><b>Dòng bị bỏ qua:</b><br>'+rep.skipped.slice(0,20).map(s=>"• Dòng "+s.row+": "+esc(s.reason)).join("<br>")+(rep.skipped.length>20?"<br>… và "+(rep.skipped.length-20)+" dòng nữa":"")+'</div>';
  return h+"</div>"}
-function xlRun(kind,inputId){const inp=document.getElementById(inputId);const f=inp&&inp.files&&inp.files[0];
- if(!f){toast("Chưa chọn file.");return}
+function xlProcess(kind,f){if(!f){toast("Chưa chọn file.");return}
  toast("Đang đọc file "+f.name+" …");
  xlReadRows(f).then(rows=>{if(!rows||rows.length<2){toast("File không có dữ liệu — cần dòng tiêu đề + ít nhất 1 dòng.");return}
   let rep;
   if(kind==="kho"){const wh=document.getElementById("xlKhoWh");rep=doImportKho(rows,{warehouseId:wh?wh.value:"",approve:(document.getElementById("xlKhoStatus")||{}).value==="approved"})}
   else if(kind==="khach")rep=doImportKhach(rows);
   else rep=doImportDon(rows);
-  xlReports[kind]=rep;render();toast("Nhập xong: "+rep.title+" — tạo "+(rep.added||0)+", bỏ qua "+rep.skipped.length+" dòng.")}).catch(e=>{toast("Lỗi đọc file: "+(e.message||e))});
- inp.value=""}
-function vXlImport(r){const whOpts=DB.warehouses.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
- const card=(title,desc,extra,btns,rep)=>'<div class="card" style="margin-bottom:14px"><div class="card-t">'+title+'</div><div style="font-size:12.5px;color:#64748b;margin:6px 0 10px">'+desc+'</div>'+(extra||"")+'<div style="display:flex;gap:8px;flex-wrap:wrap">'+btns+'</div>'+xlReportHtml(rep)+'</div>';
- r.innerHTML='<div style="font-size:13px;color:#64748b;margin-bottom:12px">Đọc file <b>.xlsx / .xls / .csv</b>. Hàng hóa được khớp theo <b>Mã hàng (SKU)</b> hoặc <b>Tên hàng</b> — dòng nào không khớp sẽ được liệt kê rõ để sửa lại file. Bấm <b>Tải file mẫu</b> để lấy đúng cột cần điền.</div>'
- +card("1 · Nhập kho hàng loạt","Mỗi dòng = 1 mặt hàng nhập. Cột: <b>Mã hàng · Tên hàng · Số lượng · Giá nhập · Ngày · Nhà cung cấp</b>. Các dòng cùng Ngày + cùng Nhà cung cấp được gom thành 1 phiếu nhập.",
-   DB.warehouses.length?'<div class="fgrid" style="margin-bottom:10px"><div class="field"><label>Nhập vào kho</label><select id="xlKhoWh">'+whOpts+'</select></div><div class="field"><label>Trạng thái phiếu sau khi nhập</label><select id="xlKhoStatus"><option value="draft">Chờ duyệt (kiểm tra rồi duyệt sau)</option><option value="approved">Duyệt luôn (cộng tồn ngay)</option></select></div></div>':'<div style="color:#b91c1c;font-size:12.5px;margin-bottom:10px">Chưa có kho nào — tạo kho ở mục Kho trước.</div>',
-   '<button class="btn ghost" onclick="xlTemplate(\'kho\')">⬇ Tải file mẫu</button><label class="btn" style="cursor:pointer">📥 Chọn file Excel / CSV<input id="xlf-kho" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="xlRun(\'kho\',\'xlf-kho\')"></label>',xlReports.kho)
- +card("2 · Cập nhật danh sách khách hàng","Mỗi dòng = 1 khách / nhà cung cấp. Cột: <b>Tên khách hàng · SĐT · Địa chỉ · Email · Mã số thuế · Ghi chú · Loại</b> (Khách hàng / Nhà cung cấp / Cả hai). Khách đã có (trùng SĐT hoặc trùng tên) sẽ được <b>cập nhật</b> thông tin mới, chưa có thì <b>thêm mới</b>. File xuất từ Sapo (có cột Họ / Tên riêng, SĐT dạng +84…) cũng đọc được.",
-   "",
-   '<button class="btn ghost" onclick="xlTemplate(\'khach\')">⬇ Tải file mẫu</button><label class="btn" style="cursor:pointer">📥 Chọn file Excel / CSV<input id="xlf-khach" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="xlRun(\'khach\',\'xlf-khach\')"></label>',xlReports.khach)
- +card("3 · Tạo đơn hàng hàng loạt","Mỗi dòng = 1 dòng hàng trong đơn. Cột: <b>Số đơn · Ngày · Khách hàng · SĐT khách · Mã hàng · Tên hàng · Số lượng · Đơn giá · Chiết khấu</b>. Các dòng cùng <b>Số đơn</b> (hoặc cùng khách + cùng ngày nếu không có cột Số đơn) gom thành 1 đơn. Đơn tạo ở trạng thái <b>nháp</b> để kiểm tra trước khi Xác nhận. Khách chưa có trong danh sách sẽ được tạo mới tự động.",
-   "",
-   '<button class="btn ghost" onclick="xlTemplate(\'don\')">⬇ Tải file mẫu</button><label class="btn" style="cursor:pointer">📥 Chọn file Excel / CSV<input id="xlf-don" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="xlRun(\'don\',\'xlf-don\')"></label>',xlReports.don)}
-
+  xlReports[kind]=rep;render();toast("Nhập xong: "+rep.title+" — tạo "+(rep.added||0)+", bỏ qua "+rep.skipped.length+" dòng.")}).catch(e=>{toast("Lỗi đọc file: "+(e.message||e))})}
+function xlRun(kind,inputId){const inp=document.getElementById(inputId);xlProcess(kind,inp&&inp.files&&inp.files[0]);if(inp)inp.value=""}
+function xlDrop(e,kind){const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];xlProcess(kind,f)}
+function vXlImport(r){
+ const IC={
+  box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  cart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>',
+  file:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/></svg>'};
+ const chips=a=>'<div class="xl-cols">'+a.map(c=>'<span>'+c+'</span>').join("")+'</div>';
+ const drop=(kind,id)=>'<label class="xl-drop" ondragover="event.preventDefault();this.classList.add(\'drag\')" ondragleave="this.classList.remove(\'drag\')" ondrop="event.preventDefault();this.classList.remove(\'drag\');xlDrop(event,\''+kind+'\')">'+IC.up+'<span><b>Bấm để chọn file — hoặc kéo thả vào đây</b><small>Chấp nhận .xlsx · .xls · .csv</small></span><input id="'+id+'" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="xlRun(\''+kind+'\',\''+id+'\')"></label>';
+ const card=(g,ic,step,name,desc,cols,extra,kind,id,rep)=>
+  '<div class="xl-card"><div class="xl-head"><div class="xl-ic '+g+'">'+ic+'</div><div><div class="xl-name">'+name+'</div><div class="xl-step">'+step+'</div></div></div>'
+  +'<div class="xl-desc">'+desc+'</div>'+chips(cols)+(extra||"")
+  +'<div class="xl-actions">'+drop(kind,id)+'<button class="btn xl-tpl" onclick="xlTemplate(\''+kind+'\')">⬇ Tải file mẫu để điền theo</button></div>'
+  +xlReportHtml(rep)+'</div>';
+ const whOpts=DB.warehouses.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
+ const khoExtra=DB.warehouses.length
+  ?'<div class="xl-opts"><div class="field"><label>Nhập vào kho</label><select id="xlKhoWh">'+whOpts+'</select></div><div class="field"><label>Trạng thái phiếu sau khi nhập</label><select id="xlKhoStatus"><option value="draft">Chờ duyệt — kiểm tra rồi duyệt sau</option><option value="approved">Duyệt luôn — cộng tồn ngay</option></select></div></div>'
+  :'<div class="xl-opts" style="color:#b91c1c;font-size:12.5px">Chưa có kho nào — tạo kho ở mục Kho hàng trước.</div>';
+ r.innerHTML='<div class="xl-hero"><div class="xl-hero-ic">'+IC.file+'</div><div><div class="xl-hero-t">Nhập dữ liệu từ Excel</div><div class="xl-hero-s">Nạp hàng loạt trong vài giây thay vì gõ tay từng dòng. Hàng hóa khớp theo <b>Mã hàng (SKU)</b> hoặc <b>Tên hàng</b>; khách khớp theo <b>SĐT</b> hoặc <b>tên</b>. Dòng nào không khớp, app liệt kê rõ để mày sửa lại file.</div></div></div>'
+ +'<div class="xl-grid">'
+ +card("g1",IC.box,"Bước 1 · Hàng vào kho","Nhập kho hàng loạt","Mỗi dòng là 1 mặt hàng nhập. Các dòng cùng <b>Ngày</b> + cùng <b>Nhà cung cấp</b> được gom thành 1 phiếu nhập.",["Mã hàng","Tên hàng","Số lượng","Giá nhập","Ngày","Nhà cung cấp"],khoExtra,"kho","xlf-kho",xlReports.kho)
+ +card("g2",IC.users,"Bước 2 · Danh sách đối tác","Cập nhật khách hàng","Mỗi dòng là 1 khách hoặc nhà cung cấp. Đã có (trùng SĐT / tên) thì <b>cập nhật</b> thông tin mới, chưa có thì <b>thêm mới</b>. File xuất từ Sapo — cột Họ/Tên riêng, SĐT dạng +84 — cũng đọc được.",["Tên khách hàng","SĐT","Địa chỉ","Email","Mã số thuế","Ghi chú","Loại"],"","khach","xlf-khach",xlReports.khach)
+ +card("g3",IC.cart,"Bước 3 · Bán hàng loạt","Tạo đơn hàng hàng loạt","Mỗi dòng là 1 dòng hàng trong đơn. Các dòng cùng <b>Số đơn</b> (hoặc cùng khách + cùng ngày) gom thành 1 đơn <b>nháp</b> để kiểm tra trước khi Xác nhận. Khách chưa có sẽ được tạo mới tự động.",["Số đơn","Ngày","Khách hàng","SĐT khách","Mã hàng","Tên hàng","Số lượng","Đơn giá","Chiết khấu"],"","don","xlf-don",xlReports.don)
+ +'</div>'}
 </script>
 <script>
 /* ===== FORM DON HANG 2 COT (v2.3): trai = dong hang, phai = khach hang ===== */
@@ -2002,6 +2013,39 @@ html[data-theme="dark"] .section-title{color:var(--text)}
 .login-card h1::after{content:"";display:block;width:48px;height:48px;margin-top:-63px;margin-bottom:15px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/%3E%3Cpath d='M3.3 7 12 12l8.7-5'/%3E%3Cpath d='M12 22V12'/%3E%3C/svg%3E");background-size:26px;background-position:center;background-repeat:no-repeat}
 .login-card input{padding:10px 12px}
 .login-card .btn.primary{padding:11px;font-size:14px}
+
+/* ===== TRANG NHAP TU EXCEL (v2.5) ===== */
+.xl-hero{display:flex;gap:16px;align-items:center;background:linear-gradient(120deg,#0b1e3a 0%,#0a2e2a 70%,#065f46 115%);border-radius:18px;padding:20px 22px;margin-bottom:16px;color:#fff;box-shadow:0 18px 40px -18px rgba(2,6,23,.5)}
+.xl-hero-ic{width:52px;height:52px;flex:0 0 52px;border-radius:15px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center}
+.xl-hero-ic svg{width:27px;height:27px}
+.xl-hero-t{font-size:19px;font-weight:800;letter-spacing:-.01em}
+.xl-hero-s{font-size:13px;color:#c3d2e4;margin-top:3px;line-height:1.55;max-width:900px}
+.xl-hero-s b{color:#fff}
+.xl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
+.xl-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:19px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.xl-head{display:flex;gap:12px;align-items:center}
+.xl-ic{width:47px;height:47px;flex:0 0 47px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff}
+.xl-ic svg{width:24px;height:24px}
+.xl-ic.g1{background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 10px 20px -8px rgba(5,150,105,.65)}
+.xl-ic.g2{background:linear-gradient(135deg,#0ea5e9,#2563eb);box-shadow:0 10px 20px -8px rgba(37,99,235,.6)}
+.xl-ic.g3{background:linear-gradient(135deg,#fb923c,#f97316);box-shadow:0 10px 20px -8px rgba(249,115,22,.6)}
+.xl-name{font-size:16px;font-weight:800;letter-spacing:-.01em}
+.xl-step{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:1px}
+.xl-desc{font-size:13px;color:#52627a;line-height:1.6;margin:13px 0 11px}
+html[data-theme="dark"] .xl-desc{color:var(--muted)}
+.xl-cols{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.xl-cols span{font-size:11.5px;font-weight:600;background:#eef4f9;border:1px solid #dde7f0;color:#33506e;border-radius:999px;padding:3px 10px}
+html[data-theme="dark"] .xl-cols span{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:var(--sidebar-text)}
+.xl-opts{background:#f7fafc;border:1px solid #e6edf3;border-radius:13px;padding:12px;display:grid;gap:10px;margin-bottom:14px}
+html[data-theme="dark"] .xl-opts{background:rgba(255,255,255,.03);border-color:var(--border)}
+.xl-actions{margin-top:auto;display:flex;flex-direction:column;gap:8px}
+.xl-drop{display:flex;align-items:center;gap:12px;border:1.6px dashed #9db2c8;border-radius:14px;padding:13px 15px;cursor:pointer;transition:all .15s;background:#fbfdff}
+html[data-theme="dark"] .xl-drop{background:rgba(255,255,255,.02);border-color:#3b4c66}
+.xl-drop:hover,.xl-drop.drag{border-color:var(--green);background:rgba(16,185,129,.07);transform:translateY(-1px)}
+.xl-drop>svg{width:23px;height:23px;color:var(--green-d);flex:0 0 23px}
+.xl-drop b{font-size:13.5px;display:block}
+.xl-drop small{color:var(--muted);font-size:11.5px}
+.xl-tpl{justify-content:center;font-weight:600}
 
 </style>
 </body>
